@@ -1,0 +1,65 @@
+---
+description: WordPress and PHP conventions for CaaS Control
+globs: "**/*.php"
+alwaysApply: false
+---
+
+# PHP & WordPress standards
+
+## File header
+
+Every PHP file:
+
+```php
+<?php
+/**
+ * Brief description.
+ *
+ * @package Caas_Control
+ */
+
+declare( strict_types=1 );
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+```
+
+Partials may use `defined( 'ABSPATH' ) || exit;` on one line.
+
+## Security
+
+- Capabilities: `current_user_can( 'manage_options' )` (or tighter) before admin actions and sensitive output.
+- Escape on output: `esc_html`, `esc_attr`, `esc_url`, `wp_kses_post` as appropriate.
+- Sanitize on input: `sanitize_text_field`, `absint`, Settings API / `register_setting` for options.
+- Nonces for forms and AJAX: `wp_nonce_field`, `check_admin_referer`, `wp_verify_nonce`.
+- Never trust `$_GET` / `$_POST` / `$_REQUEST` without validation.
+
+## i18n
+
+Wrap user-visible strings: `__( '...', 'caas-control' )`, `_e`, `esc_html_e`, etc.
+
+## Assets
+
+Enqueue only on relevant screens (see admin class: check `get_current_screen()`). Pass `$this->version` for cache busting. Scripts that need `wp.ajax` or DOM helpers should list dependencies (e.g. `array( 'jquery' )`) instead of an empty array.
+
+## Types and style
+
+- Use typed properties and return types where the codebase already does (`: void`, `string`, etc.).
+- Prefer WordPress APIs (`wpdb`, transients, cron, REST) over raw SQL or custom HTTP unless CaaS integration requires otherwise.
+- Document public methods with short PHPDoc blocks; avoid noisy comments on obvious code.
+
+## Examples
+
+```php
+// ❌ BAD
+echo $_POST['api_key'];
+update_option( 'key', $_POST['key'] );
+
+// ✅ GOOD
+if ( ! current_user_can( 'manage_options' ) ) {
+	return;
+}
+$key = isset( $_POST['api_key'] ) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
+update_option( 'caas_control_api_key', $key );
+```

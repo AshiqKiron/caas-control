@@ -1,0 +1,34 @@
+---
+description: CaaS Control plugin layout, naming, and where to add features
+alwaysApply: true
+---
+
+# CaaS Control — project context
+
+WordPress plugin for CaaS (Content as a Service) integrations. PHP 7.4+, WordPress 6.0+, GPL-2.0-or-later. Text domain: `caas-control`.
+
+## Layout
+
+| Path | Role |
+|------|------|
+| `caas-control.php` | Bootstrap, constants, activation hooks |
+| `includes/` | Loader, activator/deactivator, `Caas_Control` orchestration |
+| `admin/` | Admin class, CSS/JS, partials (settings UI) |
+| `public/` | Front-end hooks and assets |
+| `languages/` | i18n |
+| `uninstall.php` | Cleanup on plugin delete |
+
+## Constants and prefix
+
+Use `CAAS_CONTROL_*` constants from the bootstrap (`CAAS_CONTROL_PLUGIN_DIR`, `CAAS_CONTROL_PLUGIN_URL`, etc.). Prefix hooks, options, and transients with `caas_control_` or the plugin slug `caas-control` where WordPress expects a slug.
+
+## Adding behavior
+
+- Register hooks via `Caas_Control_Loader` in `includes/class-caas-control.php` (`define_admin_hooks` / `define_public_hooks`), not ad hoc in the bootstrap file.
+- Admin UI: extend `Caas_Control_Admin` and templates under `admin/partials/`.
+- Front-end: extend `Caas_Control_Public`.
+- New PHP classes: `includes/class-caas-control-*.php`, require from the appropriate loader path, class name `Caas_Control_*`.
+
+## Scope of changes
+
+Keep diffs minimal. Match existing WordPress Plugin Boilerplate–style structure. Do not rename the plugin folder or text domain unless explicitly requested.
