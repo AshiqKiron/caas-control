@@ -17,6 +17,7 @@
 	var creatureEl = null;
 	var followRaf = null;
 	var chaosTimer = null;
+	var chaosFirstSchedule = true;
 	var meowAudio = null;
 	var sitActive = false;
 	var sitAutoTimer = null;
@@ -24,30 +25,45 @@
 	var publishGateResumeTimer = null;
 	var publishGateBtn = null;
 	var sitMediaWrap = null;
+	var sitCountdownInterval = null;
 
 	function creatureMediaUrl() {
 		if (cfg.agent === 'custom' && cfg.customImageUrl) {
 			return cfg.customImageUrl;
 		}
-		if (cfg.agent === 'cat' && cfg.catImageUrl) {
+		if (cfg.catImageUrl) {
 			return cfg.catImageUrl;
 		}
 		return '';
+	}
+
+	function sitJudgingMediaUrl() {
+		if (cfg.judgingVideoUrl) {
+			return cfg.judgingVideoUrl;
+		}
+		return creatureMediaUrl();
 	}
 
 	function mediaUrlIsVideo(url) {
 		return /\.(mp4|webm|ogg)(\?|#|$)/i.test(url);
 	}
 
-	function appendAgentMedia(parent, url, alt) {
+	function appendAgentMedia(parent, url, alt, size) {
 		alt = alt || '';
+		size = size || 'creature';
 		if (mediaUrlIsVideo(url)) {
 			var video = document.createElement('video');
 			video.src = url;
 			video.muted = true;
 			video.playsInline = true;
 			video.autoplay = true;
-			video.loop = true;
+			video.loop = size !== 'judging';
+			video.setAttribute('playsinline', '');
+			video.setAttribute('webkit-playsinline', '');
+			if (size === 'creature') {
+				video.setAttribute('width', '56');
+				video.setAttribute('height', '56');
+			}
 			video.setAttribute('aria-label', alt);
 			parent.appendChild(video);
 			var playPromise = video.play();
@@ -70,23 +86,28 @@
 		return AGENT_EMOJI[cfg.agent] || AGENT_EMOJI.cat;
 	}
 
-	function ensureCreature() {
-		if (creatureEl) {
-			return creatureEl;
+	function paintCreatureMedia(el) {
+		while (el.firstChild) {
+			el.removeChild(el.firstChild);
 		}
-		creatureEl = document.createElement('div');
-		creatureEl.className = 'caas-control-creature';
-		creatureEl.setAttribute('role', 'img');
-		creatureEl.setAttribute('aria-label', cfg.companionName || 'Chaos agent');
-
 		var glyph = agentGlyph();
 		if (glyph) {
-			creatureEl.textContent = glyph;
-		} else {
-			appendAgentMedia(creatureEl, creatureMediaUrl(), cfg.companionName || '');
+			el.textContent = glyph;
+			return;
 		}
+		el.textContent = '';
+		appendAgentMedia(el, creatureMediaUrl(), cfg.companionName || '');
+	}
 
-		document.body.appendChild(creatureEl);
+	function ensureCreature() {
+		if (!creatureEl) {
+			creatureEl = document.createElement('div');
+			creatureEl.className = 'caas-control-creature';
+			creatureEl.setAttribute('role', 'img');
+			document.body.appendChild(creatureEl);
+		}
+		creatureEl.setAttribute('aria-label', cfg.companionName || 'Chaos agent');
+		paintCreatureMedia(creatureEl);
 		return creatureEl;
 	}
 
@@ -94,12 +115,14 @@
 		return sitActive || !!publishGateResumeTimer;
 	}
 
-	function clearSitUi() {
+	var JUDGING_MEDIA_FADE_MS = 450;
+
+	function clearSitUi(immediate) {
 		if (sitAutoTimer) {
 			window.clearTimeout(sitAutoTimer);
 			sitAutoTimer = null;
 		}
-		removeSitMedia();
+		removeSitMedia(!!immediate);
 	}
 
 	function sitJudgingAriaLabel() {
@@ -109,34 +132,168 @@
 		);
 	}
 
-	function removeSitMedia() {
-		if (sitMediaWrap && sitMediaWrap.parentNode) {
-			sitMediaWrap.parentNode.removeChild(sitMediaWrap);
-		}
-		sitMediaWrap = null;
-		if (creatureEl) {
-			creatureEl.style.display = '';
+	function detachSitMediaWrap(wrap) {
+		if (wrap && wrap.parentNode) {
+			wrap.parentNode.removeChild(wrap);
 		}
 	}
 
-	function playSitJudgingVideo() {
-		var url = cfg.judgingVideoUrl;
-		if (!url) {
-			return false;
+	function removeSitMedia(immediate) {
+		clearSitCountdown();
+		var wrap = sitMediaWrap;
+		sitMediaWrap = null;
+		if (!wrap) {
+			if (creatureEl) {
+				creatureEl.style.display = '';
+			}
+			return;
 		}
-		removeSitMedia();
+		if (creatureEl) {
+			creatureEl.style.display = '';
+		}
+		if (immediate || !wrap.parentNode) {
+			detachSitMediaWrap(wrap);
+			return;
+		}
+		wrap.classList.remove('is-visible');
+		var removed = false;
+		function finishRemove() {
+			if (removed) {
+				return;
+			}
+			removed = true;
+			detachSitMediaWrap(wrap);
+		}
+		wrap.addEventListener(
+			'transitionend',
+			function (e) {
+				if (e.target === wrap && e.propertyName === 'opacity') {
+					finishRemove();
+				}
+			}
+		);
+		window.setTimeout(finishRemove, JUDGING_MEDIA_FADE_MS + 50);
+	}
+
+	function chaosDurationMs() {
+		return (cfg.durationSeconds || 5) * 1000;
+	}
+
+	function clearSitCountdown() {
+		if (sitCountdownInterval) {
+			window.clearInterval(sitCountdownInterval);
+			sitCountdownInterval = null;
+		}
+	}
+
+	function formatCountdownLabel(totalSeconds) {
+		totalSeconds = Math.max(0, totalSeconds);
+		var strings = cfg.strings || {};
+		if (totalSeconds >= 60) {
+			var mins = Math.floor(totalSeconds / 60);
+			var secs = totalSeconds % 60;
+			var template = strings.countdownMinsSeconds || '%1$s mins %2$s sec left';
+			return template.replace('%1$s', String(mins)).replace('%2$s', String(secs));
+		}
+		var secTemplate = strings.countdownSeconds || '%s sec left';
+		return secTemplate.replace('%s', String(totalSeconds));
+	}
+
+	function updateSitCountdownDisplay(el, endsAt) {
+		var leftMs = Math.max(0, endsAt - Date.now());
+		var totalSeconds = Math.ceil(leftMs / 1000);
+		var label = formatCountdownLabel(totalSeconds);
+		el.textContent = label;
+		el.setAttribute('aria-label', label);
+	}
+
+	function startSitCountdown(durationMs) {
+		clearSitCountdown();
+		if (!durationMs || durationMs <= 0 || !sitMediaWrap) {
+			return;
+		}
+		var wrap = sitMediaWrap;
+		var el = wrap.querySelector('.caas-control-judging-countdown');
+		if (!el) {
+			return;
+		}
+		var endsAt = Date.now() + durationMs;
+		updateSitCountdownDisplay(el, endsAt);
+		sitCountdownInterval = window.setInterval(function () {
+			if (sitMediaWrap !== wrap) {
+				clearSitCountdown();
+				return;
+			}
+			if (Date.now() >= endsAt) {
+				updateSitCountdownDisplay(el, endsAt);
+				clearSitCountdown();
+				return;
+			}
+			updateSitCountdownDisplay(el, endsAt);
+		}, 1000);
+	}
+
+	function bindSitEndToChaosDuration(video) {
+		if (sitAutoTimer) {
+			window.clearTimeout(sitAutoTimer);
+			sitAutoTimer = null;
+		}
+		video.loop = false;
+
+		var durationMs = chaosDurationMs();
+		startSitCountdown(durationMs);
+		sitAutoTimer = window.setTimeout(function () {
+			if (!sitActive) {
+				return;
+			}
+			try {
+				video.pause();
+			} catch (err) {
+				// Ignore pause errors on detached or unsupported elements.
+			}
+			removeCreature();
+		}, durationMs);
+	}
+
+	function playSitJudgingVideo() {
+		var url = sitJudgingMediaUrl();
+		if (!url) {
+			return null;
+		}
+		removeSitMedia(true);
 		var wrap = document.createElement('div');
 		wrap.className = 'caas-control-judging-media';
 		wrap.setAttribute('role', 'group');
 		wrap.setAttribute('aria-label', sitJudgingAriaLabel());
 
-		appendAgentMedia(wrap, url, sitJudgingAriaLabel());
+		var countdownEl = document.createElement('div');
+		countdownEl.className = 'caas-control-judging-countdown';
+		countdownEl.setAttribute('role', 'timer');
+		countdownEl.setAttribute('aria-live', 'polite');
+		countdownEl.setAttribute('aria-atomic', 'true');
+		wrap.appendChild(countdownEl);
+
+		var shooBtn = document.createElement('button');
+		shooBtn.type = 'button';
+		shooBtn.className = 'caas-control-shoo-btn';
+		shooBtn.textContent = (cfg.strings && cfg.strings.shoo) || 'Shoo!';
+		shooBtn.addEventListener('click', shooAwayJudging);
+		wrap.appendChild(shooBtn);
+
+		var media = appendAgentMedia(wrap, url, sitJudgingAriaLabel(), 'judging');
 		document.body.appendChild(wrap);
 		sitMediaWrap = wrap;
+		window.requestAnimationFrame(function () {
+			window.requestAnimationFrame(function () {
+				if (sitMediaWrap === wrap) {
+					wrap.classList.add('is-visible');
+				}
+			});
+		});
 		if (creatureEl) {
 			creatureEl.style.display = 'none';
 		}
-		return true;
+		return media;
 	}
 
 	function cancelPublishGate() {
@@ -152,6 +309,22 @@
 			window.clearTimeout(behaviorEndTimer);
 			behaviorEndTimer = null;
 		}
+	}
+
+	function shooAwayJudging() {
+		if (!sitMediaWrap && !sitActive) {
+			return;
+		}
+		if (sitAutoTimer) {
+			window.clearTimeout(sitAutoTimer);
+			sitAutoTimer = null;
+		}
+		clearSitCountdown();
+		cancelBehaviorEndTimer();
+		cancelPublishGate();
+		sitActive = false;
+		removeCreature();
+		toast((cfg.strings && cfg.strings.shooDismissed) || 'Fine, I\'ll leave.', 2000);
 	}
 
 	function removeCreature() {
@@ -207,7 +380,7 @@
 	}
 
 	function behaviorWalk() {
-		clearSitUi();
+		clearSitUi(true);
 		var el = ensureCreature();
 		el.className = 'caas-control-creature caas-control-creature--walk';
 		var start = window.innerWidth + 40;
@@ -225,23 +398,34 @@
 
 	function behaviorSit(opts) {
 		opts = opts || {};
-		clearSitUi();
+		clearSitUi(true);
 		sitActive = true;
 		var el = ensureCreature();
 		el.className = 'caas-control-creature caas-control-creature--sit';
 		el.style.transform =
 			'translate(' + (window.innerWidth / 2 - 30) + 'px, ' + (window.innerHeight / 2) + 'px)';
-		if (!playSitJudgingVideo()) {
+		var judgingMedia = playSitJudgingVideo();
+		if (!judgingMedia) {
 			toast(sitJudgingAriaLabel(), 2500);
+			if (!opts.skipAutoTimer) {
+				sitAutoTimer = window.setTimeout(removeCreature, (cfg.durationSeconds || 5) * 1000);
+			}
+			return;
 		}
 
 		if (!opts.skipAutoTimer) {
-			sitAutoTimer = window.setTimeout(removeCreature, (cfg.durationSeconds || 5) * 1000);
+			var durationMs = chaosDurationMs();
+			if (judgingMedia.tagName === 'VIDEO') {
+				bindSitEndToChaosDuration(judgingMedia);
+			} else {
+				startSitCountdown(durationMs);
+				sitAutoTimer = window.setTimeout(removeCreature, durationMs);
+			}
 		}
 	}
 
 	function behaviorFollow() {
-		clearSitUi();
+		clearSitUi(true);
 		var el = ensureCreature();
 		el.className = 'caas-control-creature caas-control-creature--follow';
 		function onMove(e) {
@@ -316,8 +500,18 @@
 	}
 
 	function scheduleChaos() {
-		var minutes = cfg.frequencyMinutes || 15;
-		var ms = minutes * 60 * 1000;
+		var ms;
+		if (chaosFirstSchedule) {
+			chaosFirstSchedule = false;
+			var appearSecs = cfg.appearAfterSeconds;
+			if (appearSecs === undefined || appearSecs === null) {
+				appearSecs = (cfg.frequencyMinutes || 15) * 60;
+			}
+			ms = Math.max(0, appearSecs) * 1000;
+		} else {
+			var minutes = cfg.frequencyMinutes || 15;
+			ms = minutes * 60 * 1000;
+		}
 		if (chaosTimer) {
 			clearTimeout(chaosTimer);
 		}
@@ -365,19 +559,27 @@
 				e.stopPropagation();
 				cancelPublishGate();
 				var msg = cfg.strings.publishGate || 'Cat is reviewing your changes.';
-				var gateMs = 10000;
-				toast(msg, gateMs);
 				behaviorSit({ skipAutoTimer: true });
 				publishGateBtn = btn;
-				publishGateResumeTimer = window.setTimeout(function () {
-					publishGateResumeTimer = null;
-					var target = publishGateBtn;
-					publishGateBtn = null;
-					removeCreature();
-					if (target) {
-						target.click();
+
+				function resumePublish(gateMs) {
+					toast(msg, gateMs);
+					startSitCountdown(gateMs);
+					if (publishGateResumeTimer) {
+						window.clearTimeout(publishGateResumeTimer);
 					}
-				}, gateMs);
+					publishGateResumeTimer = window.setTimeout(function () {
+						publishGateResumeTimer = null;
+						var target = publishGateBtn;
+						publishGateBtn = null;
+						removeCreature();
+						if (target) {
+							target.click();
+						}
+					}, gateMs);
+				}
+
+				resumePublish(chaosDurationMs());
 			},
 			true
 		);

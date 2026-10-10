@@ -58,6 +58,64 @@
 	padding: 0;
 	background: transparent;
 	overflow: visible;
+	opacity: 0;
+	transition: opacity 0.45s ease;
+}
+
+.caas-control-judging-media.is-visible {
+	opacity: 1;
+}
+
+.caas-control-judging-countdown {
+	position: fixed;
+	top: 16px;
+	left: 16px;
+	z-index: 1000001;
+	pointer-events: none;
+	margin: 0;
+	padding: 10px 18px;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.2;
+	font-variant-numeric: tabular-nums;
+	color: #1d2327;
+	background: #fff;
+	border: 2px solid #1d2327;
+	border-radius: 999px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.caas-control-shoo-btn {
+	position: fixed;
+	top: 16px;
+	right: 16px;
+	z-index: 1000001;
+	pointer-events: auto;
+	margin: 0;
+	padding: 10px 18px;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.2;
+	color: #1d2327;
+	background: #fff;
+	border: 2px solid #1d2327;
+	border-radius: 999px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+	cursor: pointer;
+	transition:
+		transform 0.15s ease,
+		background 0.15s ease;
+}
+
+.caas-control-shoo-btn:hover,
+.caas-control-shoo-btn:focus-visible {
+	background: #f0f0f1;
+	transform: scale(1.04);
+}
+
+.caas-control-shoo-btn:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
 }
 
 .caas-control-judging-media video,

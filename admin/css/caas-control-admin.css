@@ -27,6 +27,37 @@
 	max-width: 100%;
 }
 
+.caas-control-duration-slider {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px 16px;
+	max-width: 32em;
+}
+
+.caas-control-duration-slider__track {
+	flex: 1 1 12em;
+	min-width: 10em;
+	max-width: 100%;
+}
+
+.caas-control-duration-range {
+	display: block;
+	width: 100%;
+	margin: 0;
+	vertical-align: middle;
+}
+
+.caas-control-duration-value {
+	flex: 0 0 auto;
+	font-weight: 600;
+	min-width: 6em;
+}
+
+.caas-control-duration-value__suffix.is-hidden {
+	display: none;
+}
+
 .caas-control-custom-image-url {
 	max-width: 100%;
 	width: 28em;

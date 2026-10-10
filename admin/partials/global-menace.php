@@ -16,7 +16,13 @@ $settings = Caas_Control_Settings::get_all();
 <div class="wrap caas-control-admin caas-control-panel">
 	<h1><?php esc_html_e( 'CaaS: Global Menace Settings', 'caas-control' ); ?></h1>
 
-	<form method="post" action="options.php" class="caas-control-form">
+	<form
+		method="post"
+		action="options.php"
+		class="caas-control-form"
+		data-caas-cat-media-url="<?php echo esc_url( Caas_Control_Settings::default_cat_media_url() ); ?>"
+		data-caas-judging-media-url="<?php echo esc_url( Caas_Control_Settings::judging_video_url() ); ?>"
+	>
 		<?php
 		settings_fields( 'caas_control_menace' );
 		?>
@@ -99,6 +105,42 @@ $settings = Caas_Control_Settings::get_all();
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row">
+						<?php echo Caas_Control_Admin::field_tip( __( 'How long to wait after the page loads before the first timed companion behavior (walk, sit, follow, etc.). Later visits use Chaos Frequency.', 'caas-control' ) ); ?>
+						<label for="caas_appear_after"><?php esc_html_e( 'Cat appears after', 'caas-control' ); ?></label>
+					</th>
+					<td>
+						<?php
+						$appear_val     = (int) $settings['appear_after_seconds'];
+						$appear_min     = Caas_Control_Settings::appear_after_seconds_min();
+						$appear_max     = Caas_Control_Settings::appear_after_seconds_max();
+						$appear_step    = Caas_Control_Settings::appear_after_seconds_step();
+						$appear_display = Caas_Control_Settings::appear_after_slider_display( $appear_val );
+						?>
+						<div class="caas-control-duration-slider caas-control-appear-after-slider">
+							<div class="caas-control-duration-slider__track">
+								<input
+									type="range"
+									class="caas-control-appear-after-range"
+									id="caas_appear_after"
+									name="<?php echo esc_attr( Caas_Control_Settings::OPTION_KEY ); ?>[appear_after_seconds]"
+									min="<?php echo esc_attr( (string) $appear_min ); ?>"
+									max="<?php echo esc_attr( (string) $appear_max ); ?>"
+									step="<?php echo esc_attr( (string) $appear_step ); ?>"
+									value="<?php echo esc_attr( (string) $appear_val ); ?>"
+									aria-valuemin="<?php echo esc_attr( (string) $appear_min ); ?>"
+									aria-valuemax="<?php echo esc_attr( (string) $appear_max ); ?>"
+									aria-valuenow="<?php echo esc_attr( (string) $appear_val ); ?>"
+								/>
+							</div>
+							<output class="caas-control-duration-value" for="caas_appear_after">
+								<span class="caas-control-duration-value__num"><?php echo esc_html( $appear_display['display'] ); ?></span>
+								<span class="caas-control-duration-value__suffix<?php echo $appear_display['use_seconds_suffix'] ? '' : ' is-hidden'; ?>"><?php esc_html_e( 'seconds', 'caas-control' ); ?></span>
+							</output>
+						</div>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">
 						<?php echo Caas_Control_Admin::field_tip( __( 'How often timed companion behaviors run (walk, sit, follow, etc.).', 'caas-control' ) ); ?>
 						<label for="caas_frequency"><?php esc_html_e( 'Chaos Frequency', 'caas-control' ); ?></label>
 					</th>
@@ -116,11 +158,34 @@ $settings = Caas_Control_Settings::get_all();
 						<label for="caas_duration"><?php esc_html_e( 'Chaos Duration', 'caas-control' ); ?></label>
 					</th>
 					<td>
-						<select id="caas_duration" name="<?php echo esc_attr( Caas_Control_Settings::OPTION_KEY ); ?>[duration_seconds]">
-							<option value="5" <?php selected( (int) $settings['duration_seconds'], 5 ); ?>><?php esc_html_e( '5 seconds', 'caas-control' ); ?></option>
-							<option value="10" <?php selected( (int) $settings['duration_seconds'], 10 ); ?>><?php esc_html_e( '10 seconds', 'caas-control' ); ?></option>
-							<option value="30" <?php selected( (int) $settings['duration_seconds'], 30 ); ?>><?php esc_html_e( 'Until you cry uncle', 'caas-control' ); ?></option>
-						</select>
+						<?php
+						$duration_val     = (int) $settings['duration_seconds'];
+						$duration_min     = Caas_Control_Settings::duration_seconds_min();
+						$duration_max     = Caas_Control_Settings::duration_seconds_max();
+						$duration_step    = Caas_Control_Settings::duration_seconds_step();
+						$duration_display = Caas_Control_Settings::duration_slider_display( $duration_val );
+						?>
+						<div class="caas-control-duration-slider">
+							<div class="caas-control-duration-slider__track">
+								<input
+									type="range"
+									class="caas-control-duration-range"
+									id="caas_duration"
+									name="<?php echo esc_attr( Caas_Control_Settings::OPTION_KEY ); ?>[duration_seconds]"
+									min="<?php echo esc_attr( (string) $duration_min ); ?>"
+									max="<?php echo esc_attr( (string) $duration_max ); ?>"
+									step="<?php echo esc_attr( (string) $duration_step ); ?>"
+									value="<?php echo esc_attr( (string) $duration_val ); ?>"
+									aria-valuemin="<?php echo esc_attr( (string) $duration_min ); ?>"
+									aria-valuemax="<?php echo esc_attr( (string) $duration_max ); ?>"
+									aria-valuenow="<?php echo esc_attr( (string) $duration_val ); ?>"
+								/>
+							</div>
+							<output class="caas-control-duration-value" for="caas_duration">
+								<span class="caas-control-duration-value__num"><?php echo esc_html( $duration_display['display'] ); ?></span>
+								<span class="caas-control-duration-value__suffix<?php echo $duration_display['use_seconds_suffix'] ? '' : ' is-hidden'; ?>"><?php esc_html_e( 'seconds', 'caas-control' ); ?></span>
+							</output>
+						</div>
 					</td>
 				</tr>
 				<tr>

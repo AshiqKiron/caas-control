@@ -18,6 +18,14 @@ class Caas_Control_Settings {
 
 	public const OPTION_KEY = 'caas_control_settings';
 
+	private const DURATION_SECONDS_MIN  = 5;
+	private const DURATION_SECONDS_MAX  = 300;
+	private const DURATION_SECONDS_STEP = 5;
+
+	private const APPEAR_AFTER_SECONDS_MIN  = 0;
+	private const APPEAR_AFTER_SECONDS_MAX  = 900;
+	private const APPEAR_AFTER_SECONDS_STEP = 5;
+
 	/**
 	 * Default option values.
 	 *
@@ -30,6 +38,7 @@ class Caas_Control_Settings {
 			'agent'                   => 'cat',
 			'companion_name'          => 'Sir Paws-a-Lot',
 			'frequency_minutes'       => 15,
+			'appear_after_seconds'    => 900,
 			'duration_seconds'        => 5,
 			'habitat_frontend'        => true,
 			'habitat_backend'         => true,
@@ -57,6 +66,127 @@ class Caas_Control_Settings {
 	}
 
 	/**
+	 * Clamp and snap chaos duration to the allowed slider range.
+	 */
+	public static function normalize_duration_seconds( int $seconds ): int {
+		$min  = self::DURATION_SECONDS_MIN;
+		$max  = self::DURATION_SECONDS_MAX;
+		$step = self::DURATION_SECONDS_STEP;
+
+		$seconds = max( $min, min( $max, $seconds ) );
+		$snapped = (int) ( round( $seconds / $step ) * $step );
+
+		return max( $min, min( $max, $snapped ) );
+	}
+
+	public static function duration_seconds_min(): int {
+		return self::DURATION_SECONDS_MIN;
+	}
+
+	public static function duration_seconds_max(): int {
+		return self::DURATION_SECONDS_MAX;
+	}
+
+	public static function duration_seconds_step(): int {
+		return self::DURATION_SECONDS_STEP;
+	}
+
+	/**
+	 * Clamp and snap initial companion delay to the allowed slider range.
+	 */
+	public static function normalize_appear_after_seconds( int $seconds ): int {
+		$min  = self::APPEAR_AFTER_SECONDS_MIN;
+		$max  = self::APPEAR_AFTER_SECONDS_MAX;
+		$step = self::APPEAR_AFTER_SECONDS_STEP;
+
+		$seconds = max( $min, min( $max, $seconds ) );
+		if ( 0 === $seconds ) {
+			return 0;
+		}
+
+		$snapped = (int) ( round( $seconds / $step ) * $step );
+
+		return max( $step, min( $max, $snapped ) );
+	}
+
+	public static function appear_after_seconds_min(): int {
+		return self::APPEAR_AFTER_SECONDS_MIN;
+	}
+
+	public static function appear_after_seconds_max(): int {
+		return self::APPEAR_AFTER_SECONDS_MAX;
+	}
+
+	public static function appear_after_seconds_step(): int {
+		return self::APPEAR_AFTER_SECONDS_STEP;
+	}
+
+	/**
+	 * Admin appear-after slider label (0 = immediately; otherwise same rules as duration).
+	 *
+	 * @return array{display: string, use_seconds_suffix: bool}
+	 */
+	public static function appear_after_slider_display( int $seconds ): array {
+		$seconds = self::normalize_appear_after_seconds( $seconds );
+
+		if ( 0 === $seconds ) {
+			return array(
+				'display'            => __( 'Immediately', 'caas-control' ),
+				'use_seconds_suffix' => false,
+			);
+		}
+
+		if ( $seconds < 60 ) {
+			return array(
+				'display'            => (string) $seconds,
+				'use_seconds_suffix' => true,
+			);
+		}
+
+		$mins = (int) floor( $seconds / 60 );
+		$secs = $seconds % 60;
+
+		return array(
+			'display'            => sprintf(
+				/* translators: 1: minutes, 2: remaining seconds */
+				__( '%1$s mins %2$s seconds', 'caas-control' ),
+				(string) $mins,
+				(string) $secs
+			),
+			'use_seconds_suffix' => false,
+		);
+	}
+
+	/**
+	 * Admin duration slider label (seconds-only below 60; minutes + seconds from 60 up).
+	 *
+	 * @return array{display: string, use_seconds_suffix: bool}
+	 */
+	public static function duration_slider_display( int $seconds ): array {
+		$seconds = self::normalize_duration_seconds( $seconds );
+
+		if ( $seconds < 60 ) {
+			return array(
+				'display'              => (string) $seconds,
+				'use_seconds_suffix'   => true,
+			);
+		}
+
+		$mins = (int) floor( $seconds / 60 );
+		$secs = $seconds % 60;
+
+		return array(
+			'display'              => sprintf(
+				/* translators: 1: minutes, 2: remaining seconds */
+				__( '%1$s mins %2$s seconds', 'caas-control' ),
+				(string) $mins,
+				(string) $secs
+			),
+			'use_seconds_suffix'   => false,
+		);
+	}
+
+	/**
 	 * @return array<string, mixed>
 	 */
 	public static function get_all(): array {
@@ -76,6 +206,14 @@ class Caas_Control_Settings {
 			$merged['frequency_minutes'] = self::defaults()['frequency_minutes'];
 		}
 
+		$merged['duration_seconds'] = self::normalize_duration_seconds( (int) $merged['duration_seconds'] );
+
+		if ( ! array_key_exists( 'appear_after_seconds', $stored ) ) {
+			$merged['appear_after_seconds'] = (int) $merged['frequency_minutes'] * 60;
+		} else {
+			$merged['appear_after_seconds'] = self::normalize_appear_after_seconds( (int) $merged['appear_after_seconds'] );
+		}
+
 		return $merged;
 	}
 
@@ -92,8 +230,7 @@ class Caas_Control_Settings {
 		unset( $value['_form_context'] );
 
 		$agents = array( 'cat', 'custom' );
-		$freq   = array( 5, 10, 15 );
-		$dur    = array( 5, 10, 30 );
+		$freq = array( 5, 10, 15 );
 
 		$out = self::get_all();
 
@@ -109,8 +246,12 @@ class Caas_Control_Settings {
 			$out['frequency_minutes'] = (int) $value['frequency_minutes'];
 		}
 
-		if ( isset( $value['duration_seconds'] ) && in_array( (int) $value['duration_seconds'], $dur, true ) ) {
-			$out['duration_seconds'] = (int) $value['duration_seconds'];
+		if ( isset( $value['duration_seconds'] ) ) {
+			$out['duration_seconds'] = self::normalize_duration_seconds( (int) $value['duration_seconds'] );
+		}
+
+		if ( isset( $value['appear_after_seconds'] ) ) {
+			$out['appear_after_seconds'] = self::normalize_appear_after_seconds( (int) $value['appear_after_seconds'] );
 		}
 
 		$bool_keys = array(
@@ -247,6 +388,7 @@ class Caas_Control_Settings {
 			'agent'              => $s['agent'],
 			'companionName'      => $s['companion_name'],
 			'frequencyMinutes'   => (int) $s['frequency_minutes'],
+			'appearAfterSeconds' => (int) $s['appear_after_seconds'],
 			'durationSeconds'    => (int) $s['duration_seconds'],
 			'customImageUrl'     => $s['custom_image_url'],
 			'catImageUrl'        => self::default_cat_media_url(),
@@ -278,6 +420,10 @@ class Caas_Control_Settings {
 				'fakeSecurity'   => __( 'Suspicious mouse movement detected!', 'caas-control' ),
 				'seoRejection'   => __( 'Fill out your SEO meta description before I let you publish.', 'caas-control' ),
 				'scrollPost'     => __( 'Scramble!', 'caas-control' ),
+				'shoo'                 => __( 'Shoo!', 'caas-control' ),
+				'shooDismissed'        => __( 'Fine, I\'ll leave.', 'caas-control' ),
+				'countdownMinsSeconds' => __( '%1$s mins %2$s sec left', 'caas-control' ),
+				'countdownSeconds'     => __( '%s sec left', 'caas-control' ),
 				'judgingYou'     => sprintf(
 					/* translators: %s: companion display name */
 					__( '%s is judging you.', 'caas-control' ),

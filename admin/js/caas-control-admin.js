@@ -71,6 +71,76 @@
 		syncCustomAgentFields();
 		$agentForm.on('change', agentSelector, syncCustomAgentFields);
 
+		var durationRangeSelector = 'input.caas-control-duration-range[name="caas_control_settings[duration_seconds]"]';
+		var appearAfterRangeSelector = 'input.caas-control-appear-after-range[name="caas_control_settings[appear_after_seconds]"]';
+
+		function durationSliderLabel(seconds) {
+			var i18n = data && data.i18n ? data.i18n : {};
+			if (seconds < 60) {
+				return {
+					text: String(seconds),
+					useSecondsSuffix: true,
+					ariaText: String(seconds) + ' ' + (i18n.durationSeconds || 'seconds'),
+				};
+			}
+			var mins = Math.floor(seconds / 60);
+			var secs = seconds % 60;
+			var template = i18n.durationMinsSeconds || '%1$s mins %2$s seconds';
+			var text = template.replace('%1$s', String(mins)).replace('%2$s', String(secs));
+			return {
+				text: text,
+				useSecondsSuffix: false,
+				ariaText: text,
+			};
+		}
+
+		function appearAfterSliderLabel(seconds) {
+			var i18n = data && data.i18n ? data.i18n : {};
+			if (seconds <= 0) {
+				var immediate = i18n.appearImmediately || 'Immediately';
+				return {
+					text: immediate,
+					useSecondsSuffix: false,
+					ariaText: immediate,
+				};
+			}
+			return durationSliderLabel(seconds);
+		}
+
+		function syncRangeSliderUi(rangeSelector, labelFn) {
+			var $range = $agentForm.find(rangeSelector);
+			if (!$range.length) {
+				return;
+			}
+			var seconds = parseInt($range.val(), 10);
+			if (isNaN(seconds)) {
+				return;
+			}
+			var label = labelFn(seconds);
+			var $slider = $range.closest('.caas-control-duration-slider');
+			var $output = $slider.find('.caas-control-duration-value');
+			var $num = $output.find('.caas-control-duration-value__num');
+			var $suffix = $output.find('.caas-control-duration-value__suffix');
+
+			$range.attr('aria-valuenow', String(seconds));
+			$range.attr('aria-valuetext', label.ariaText);
+			$num.text(label.text);
+			$suffix.toggleClass('is-hidden', !label.useSecondsSuffix);
+		}
+
+		function syncDurationSliderUi() {
+			syncRangeSliderUi(durationRangeSelector, durationSliderLabel);
+		}
+
+		function syncAppearAfterSliderUi() {
+			syncRangeSliderUi(appearAfterRangeSelector, appearAfterSliderLabel);
+		}
+
+		$agentForm.on('input change', durationRangeSelector, syncDurationSliderUi);
+		$agentForm.on('input change', appearAfterRangeSelector, syncAppearAfterSliderUi);
+		syncDurationSliderUi();
+		syncAppearAfterSliderUi();
+
 		function syncChaosConfigFromForm() {
 			var chaos = window.caasControlChaos;
 			if (!chaos || !$agentForm.length) {
@@ -84,9 +154,31 @@
 			if (typeof customUrl === 'string') {
 				chaos.customImageUrl = customUrl;
 			}
+			var catMediaUrl = $agentForm.attr('data-caas-cat-media-url');
+			if (typeof catMediaUrl === 'string' && catMediaUrl) {
+				chaos.catImageUrl = catMediaUrl;
+			}
+			var judgingMediaUrl = $agentForm.attr('data-caas-judging-media-url');
+			if (typeof judgingMediaUrl === 'string') {
+				chaos.judgingVideoUrl = judgingMediaUrl;
+			}
 			var nameInput = $agentForm.find('input[name="caas_control_settings[companion_name]"]');
 			if (nameInput.length && nameInput.val()) {
 				chaos.companionName = nameInput.val();
+			}
+			var $durationRange = $agentForm.find(durationRangeSelector);
+			if ($durationRange.length) {
+				var durationSeconds = parseInt($durationRange.val(), 10);
+				if (!isNaN(durationSeconds)) {
+					chaos.durationSeconds = durationSeconds;
+				}
+			}
+			var $appearRange = $agentForm.find(appearAfterRangeSelector);
+			if ($appearRange.length) {
+				var appearSeconds = parseInt($appearRange.val(), 10);
+				if (!isNaN(appearSeconds)) {
+					chaos.appearAfterSeconds = appearSeconds;
+				}
 			}
 		}
 

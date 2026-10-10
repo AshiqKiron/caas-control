@@ -46,7 +46,8 @@ Enqueue only when settings allow (`Caas_Control_Settings::is_enabled()` and `sho
 ## Settings UI helpers
 
 - Field help: `Caas_Control_Admin::field_tip( __( '...', 'caas-control' ) )` before labels in partials and profile sidekick UI. Plain text only; escaped in the helper. Place tip before visible label text so screen readers get “More information” via the button `aria-label`.
-- Global Menace: wrap the options form in `.caas-control-form`; section headings in `.caas-control-section` inside `.caas-control-panel`.
+- Global Menace: wrap the options form in `.caas-control-form` with `data-caas-cat-media-url` and `data-caas-judging-media-url` for preview sync; section headings in `.caas-control-section` inside `.caas-control-panel`.
+- Chaos duration UI: range input via `duration_seconds_min()` / `max()` / `step()` and initial label from `duration_slider_display()`; styles under `.caas-control-duration-slider` in admin CSS.
 - Behavior preview: `Caas_Control_Admin::behavior_preview_button( $slug )` beside timed-behavior checkboxes; `$slug` must match chaos preview handlers (`blockMouse`, `randomBlock`, etc.).
 
 ## Bundled agent media
@@ -62,7 +63,7 @@ Enqueue only when settings allow (`Caas_Control_Settings::is_enabled()` and `sho
 - Exception: per-user sidekick uses `update_user_meta( …, 'caas_control_sidekick', … )` via `maybe_save_sidekick()` or profile save handlers in `Caas_Control_Features`.
 - New boolean settings belong in `defaults()`, `$bool_keys` (or a form-context branch), the matching admin partial, and `chaos_config_for_js()` when the front end needs them.
 - `caas_enabled` is in `$bool_keys` for the `menace` form context only; sanitize always merges onto existing options so Pro saves do not wipe the master switch.
-- Sanitize allowed enums: `agent` (`cat`|`custom`), `frequency_minutes` (5|10|15), `duration_seconds` (5|10|30).
+- Sanitize allowed enums: `agent` (`cat`|`custom`), `frequency_minutes` (5|10|15). `duration_seconds` uses `normalize_duration_seconds()` (5–300, step 5); legacy stored values (e.g. 10, 30) are snapped on read/save.
 
 ## Types and style
 

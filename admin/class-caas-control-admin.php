@@ -235,10 +235,13 @@ class Caas_Control_Admin {
 					'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 					'nonce'   => wp_create_nonce( 'caas_control_maintenance' ),
 					'i18n'    => array(
-						'working'            => __( 'Working…', 'caas-control' ),
-						'proSoon'            => __( 'Pro upgrades coming soon—feed the cat in the meantime.', 'caas-control' ),
-						'mediaMissing'       => __( 'Media library is not available on this screen.', 'caas-control' ),
-						'previewUnavailable' => __( 'Preview could not run. Reload the page and try again.', 'caas-control' ),
+						'working'             => __( 'Working…', 'caas-control' ),
+						'proSoon'             => __( 'Pro upgrades coming soon—feed the cat in the meantime.', 'caas-control' ),
+						'mediaMissing'        => __( 'Media library is not available on this screen.', 'caas-control' ),
+						'previewUnavailable'  => __( 'Preview could not run. Reload the page and try again.', 'caas-control' ),
+						'durationMinsSeconds' => __( '%1$s mins %2$s seconds', 'caas-control' ),
+						'durationSeconds'     => __( 'seconds', 'caas-control' ),
+						'appearImmediately'   => __( 'Immediately', 'caas-control' ),
 					),
 				)
 			);
