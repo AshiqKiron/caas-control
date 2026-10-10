@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       CaaS Control
  * Plugin URI:        https://example.com/caas-control
- * Description:       Control and manage CaaS (Content as a Service) integrations for WordPress.
+ * Description:       Chaos as a Service — configurable dashboard and frontend menagerie for maximum productive disruption.
  * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4

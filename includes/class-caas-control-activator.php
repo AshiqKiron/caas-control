@@ -24,12 +24,10 @@ class Caas_Control_Activator {
 			return;
 		}
 
-		$defaults = array(
-			'version' => CAAS_CONTROL_VERSION,
-		);
+		require_once CAAS_CONTROL_PLUGIN_DIR . 'includes/class-caas-control-settings.php';
 
-		if ( false === get_option( 'caas_control_settings' ) ) {
-			add_option( 'caas_control_settings', $defaults, '', false );
+		if ( false === get_option( Caas_Control_Settings::OPTION_KEY ) ) {
+			add_option( Caas_Control_Settings::OPTION_KEY, Caas_Control_Settings::defaults(), '', false );
 		}
 
 		flush_rewrite_rules();

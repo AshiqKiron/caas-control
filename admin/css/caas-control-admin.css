@@ -5,3 +5,74 @@
 .caas-control-admin {
 	max-width: 960px;
 }
+
+.caas-control-panel .caas-control-section {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 16px 20px 8px;
+	margin: 16px 0 24px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.caas-control-panel .caas-control-section h2 {
+	margin-top: 0;
+	padding-bottom: 8px;
+	border-bottom: 1px solid #dcdcde;
+	font-size: 1.1em;
+}
+
+.caas-control-agents .caas-control-agent-option {
+	display: inline-block;
+	margin: 0 16px 8px 0;
+}
+
+.caas-control-card {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 16px 20px;
+	margin-bottom: 20px;
+}
+
+.caas-control-card h2 {
+	margin-top: 0;
+}
+
+.caas-control-ajax-result {
+	min-height: 1.5em;
+	font-style: italic;
+}
+
+.caas-control-sidekick-option {
+	display: block;
+	margin-bottom: 8px;
+}
+
+.caas-control-pro-banner {
+	background: linear-gradient(135deg, #2271b1, #135e96);
+	color: #fff;
+	padding: 16px 20px;
+	border-radius: 4px;
+	margin-bottom: 20px;
+}
+
+.caas-control-pro-banner h2 {
+	color: #fff;
+	margin-top: 0;
+}
+
+.caas-control-pro-table {
+	margin-bottom: 24px;
+}
+
+.caas-control-tip-jar {
+	border-style: dashed;
+}
+
+.caas-control-dev-toggle {
+	margin-top: 16px;
+	padding: 12px;
+	background: #f6f7f7;
+	border-radius: 4px;
+}

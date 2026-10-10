@@ -12,3 +12,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 }
 
 delete_option( 'caas_control_settings' );
+
+global $wpdb;
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+$wpdb->query( "DELETE FROM {$wpdb->usermeta} WHERE meta_key = 'caas_control_sidekick'" );

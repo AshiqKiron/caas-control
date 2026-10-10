@@ -1,0 +1,38 @@
+---
+description: JavaScript conventions for CaaS chaos and admin scripts
+globs: "**/{admin,public}/js/**/*.js"
+alwaysApply: false
+---
+
+# JavaScript (CaaS Control)
+
+## Runtime entry
+
+- **`public/js/caas-control-chaos.js`** — single shared runtime for companion UI and chaos features. Expects `window.caasControlChaos` from PHP (`wp_localize_script`). Exit early if config is missing.
+- **`admin/js/caas-control-admin.js`** — plugin settings screens only; expects `window.caasControlAdmin` (AJAX maintenance, media picker for custom agent).
+- **`admin/js/caas-control-editor.js`** — block editor extensions; registered on `enqueue_block_editor_assets` when backend chaos is enabled.
+
+Do not add a second global chaos bootstrap; extend `caas-control-chaos.js` or the editor script.
+
+## Config shape
+
+PHP builds config via `Caas_Control_Settings::chaos_config_for_js()` (camelCase keys: `companionName`, `frequencyMinutes`, `behaviors.*`, `features.*`, `strings`, `proEnabled`). Admin/front merges extra keys:
+
+| Key | Typical values |
+|-----|------------------|
+| `context` | `frontend`, `backend`, `block-editor`, `login` |
+| `isAdmin` | boolean |
+| `sidekick` | user meta slug (admin only) |
+| `loginFailed` | true on failed login when login hiss is on |
+
+User-visible copy belongs in PHP `strings` / `i18n` inside `chaos_config_for_js()`, not hard-coded English in JS.
+
+## Admin AJAX
+
+Maintenance buttons use jQuery `$.post` to `admin-ajax.php` with actions `caas_control_scoop_revisions` and `caas_control_clear_cache`, nonce key `nonce`, value from `caasControlAdmin.nonce` (`caas_control_maintenance`).
+
+## Style
+
+- IIFE wrappers, `'use strict'`.
+- Match existing ES5-style in chaos.js (no build step); block editor script may use `wp.*` packages as dependencies.
+- Prefer CSS classes prefixed with `caas-control-` for DOM hooks and styling.

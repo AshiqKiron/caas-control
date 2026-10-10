@@ -5,29 +5,73 @@ alwaysApply: true
 
 # CaaS Control — project context
 
-WordPress plugin for CaaS (Content as a Service) integrations. PHP 7.4+, WordPress 6.0+, GPL-2.0-or-later. Text domain: `caas-control`.
+WordPress plugin **Chaos as a Service**: configurable admin dashboard and front-end “menagerie” (companion agents, behaviors, and playful site hooks). PHP 7.4+, WordPress 6.0+, GPL-2.0-or-later. Text domain: `caas-control`.
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `caas-control.php` | Bootstrap, constants, activation hooks |
-| `includes/` | Loader, activator/deactivator, `Caas_Control` orchestration |
-| `admin/` | Admin class, CSS/JS, partials (settings UI) |
-| `public/` | Front-end hooks and assets |
+| `caas-control.php` | Constants, requires loader/activator/deactivator/main class, activation hooks, `caas_control_run()` |
+| `includes/class-caas-control.php` | Orchestration: loads deps, registers all hooks via loader |
+| `includes/class-caas-control-loader.php` | Collects and runs `add_action` / `add_filter` |
+| `includes/class-caas-control-settings.php` | Single option `caas_control_settings`, defaults, sanitize, JS config |
+| `includes/class-caas-control-features.php` | Cross-cutting WP hooks (404, login, WSOD, profiles, WooCommerce) |
+| `includes/class-caas-control-maintenance.php` | Litter Box tools, AJAX maintenance, admin notices |
+| `includes/class-caas-control-activator.php` / `deactivator.php` | Activation defaults, deactivation |
+| `admin/class-caas-control-admin.php` | Menu, Settings API, asset enqueue, partial renders |
+| `admin/partials/global-menace.php` | Global Menace settings UI |
+| `admin/partials/litter-box-care.php` | Sidekick + maintenance UI |
+| `admin/partials/pro-breed-shop.php` | Pro toggle / dev shop UI |
+| `admin/css/caas-control-admin.css` | Admin-only settings UI styles |
+| `admin/js/caas-control-admin.js` | Maintenance AJAX, media picker (`caasControlAdmin`) |
+| `admin/js/caas-control-editor.js` | Block editor companion assets |
+| `public/class-caas-control-public.php` | Front-end CSS/JS, scroll-post markup |
+| `public/js/caas-control-chaos.js` | Shared chaos runtime (admin + front when enabled) |
+| `public/css/caas-control-public.css` | Shared styles |
+| `assets/gpl-cat/` | Default cat sprite and meow audio (GPL) |
 | `languages/` | i18n |
-| `uninstall.php` | Cleanup on plugin delete |
+| `uninstall.php` | Deletes `caas_control_settings` and `caas_control_sidekick` user meta |
 
-## Constants and prefix
+## Hook registration
 
-Use `CAAS_CONTROL_*` constants from the bootstrap (`CAAS_CONTROL_PLUGIN_DIR`, `CAAS_CONTROL_PLUGIN_URL`, etc.). Prefix hooks, options, and transients with `caas_control_` or the plugin slug `caas-control` where WordPress expects a slug.
+Register hooks only in `includes/class-caas-control.php` through `Caas_Control_Loader`:
+
+| Method | Responsibility |
+|--------|----------------|
+| `define_admin_hooks()` | `Caas_Control_Admin`, `Caas_Control_Maintenance` (AJAX, notices) |
+| `define_public_hooks()` | `Caas_Control_Public` |
+| `define_feature_hooks()` | `Caas_Control_Features` |
+
+Do not register hooks ad hoc in the bootstrap or partials.
+
+`define_feature_hooks()` wires `Caas_Control_Features`: 404 guilt (`template_redirect`), login hiss assets (`login_enqueue_scripts`), WSOD shutdown handler (`init`), user profile sidekick (`show_user_profile` / `edit_user_profile` + saves), WooCommerce order celebration (`init`).
+
+## Settings and data
+
+- **Site options:** one array option — `Caas_Control_Settings::OPTION_KEY` (`caas_control_settings`). Read with `Caas_Control_Settings::get_all()`; defaults in `defaults()`; all writes go through Settings API sanitize (`Caas_Control_Settings::sanitize()`).
+- **Form context:** partials pass hidden `_form_context` (`menace` or `pro`). Unchecked checkboxes are absent from POST; sanitize merges onto `get_all()`. `menace` updates habitat/behavior/`enable_*` booleans (not `pro_enabled`); `pro` updates only `pro_enabled`.
+- **Settings groups:** `caas_control_menace` (Global Menace), `caas_control_pro_dev` (Pro & Breed Shop). Both use the same option key and sanitize callback.
+- **Per-user:** `caas_control_sidekick` user meta — Litter Box form (`maybe_save_sidekick()`, nonce `caas_control_sidekick`) and profile UI in `Caas_Control_Features` (not the settings array).
+- **Chaos gating:** `Caas_Control_Settings::should_load_chaos( 'frontend' | 'backend' )` before enqueuing companion assets. Backend also respects `habitat_specific_only`: chaos in wp-admin only on CaaS menu screens and the block editor (see `Caas_Control_Admin::should_load_admin_chaos()`).
+- **JS config:** `Caas_Control_Settings::chaos_config_for_js()` + `Caas_Control_Settings::asset_url()` for bundled GPL cat/meow. Localized as `caasControlChaos` (contexts: `frontend`, `backend`, `block-editor`, `login`). Settings screens also localize `caasControlAdmin` for maintenance AJAX.
+- **Activation:** `Caas_Control_Activator` adds default `caas_control_settings` if the option is missing.
+
+## Admin menu
+
+Top-level slug: `caas-control` (capability `manage_options`). Subpages: same slug (Global Menace), `caas-control-care` (Litter Box), `caas-control-pro` (Pro shop).
 
 ## Adding behavior
 
-- Register hooks via `Caas_Control_Loader` in `includes/class-caas-control.php` (`define_admin_hooks` / `define_public_hooks`), not ad hoc in the bootstrap file.
-- Admin UI: extend `Caas_Control_Admin` and templates under `admin/partials/`.
-- Front-end: extend `Caas_Control_Public`.
-- New PHP classes: `includes/class-caas-control-*.php`, require from the appropriate loader path, class name `Caas_Control_*`.
+- **New admin UI:** partial under `admin/partials/`, render method on `Caas_Control_Admin`, submenu in `register_menu()` if needed.
+- **New toggles:** add key to `Caas_Control_Settings::defaults()`, sanitize in `sanitize()` (`$bool_keys` or dedicated branch), expose in the right partial, and wire into `chaos_config_for_js()` or PHP feature checks as appropriate.
+- **New front-end/admin JS behavior:** extend `caas-control-chaos.js` or editor/admin scripts (see `.cursor/rules/caas-control-javascript.mdc`); keep strings in PHP i18n via `chaos_config_for_js()` when shown to users.
+- **New WordPress hooks (404, login, etc.):** `Caas_Control_Features` + register in `define_feature_hooks()`.
+- **Maintenance / AJAX:** `Caas_Control_Maintenance`; action names `caas_control_*`, nonce `caas_control_maintenance` (see admin JS localize).
+- **New PHP classes:** `includes/class-caas-control-*.php`, require in `load_dependencies()`, class name `Caas_Control_*`.
+
+## Constants and prefix
+
+Use `CAAS_CONTROL_*` from bootstrap (`CAAS_CONTROL_PLUGIN_DIR`, `CAAS_CONTROL_PLUGIN_URL`, `CAAS_CONTROL_VERSION`, etc.). Prefix hooks, options, AJAX actions, and nonces with `caas_control_`; menu/page slug `caas-control` where WordPress expects a slug.
 
 ## Scope of changes
 

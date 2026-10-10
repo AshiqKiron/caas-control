@@ -1,0 +1,4 @@
+meow.ogg — "Meow" by IgnasD, CC0 1.0
+https://opengameart.org/content/meow
+
+gpl-cat.png — Plugin artwork (GPL-2.0-or-later, same as CaaS Control).
