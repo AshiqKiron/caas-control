@@ -8,24 +8,59 @@ alwaysApply: false
 
 ## Runtime entry
 
-- **`public/js/caas-control-chaos.js`** — single shared runtime for companion UI and chaos features. Expects `window.caasControlChaos` from PHP (`wp_localize_script`). Exit early if config is missing.
-- **`admin/js/caas-control-admin.js`** — plugin settings screens only; expects `window.caasControlAdmin` (AJAX maintenance, media picker for custom agent).
+- **`public/js/caas-control-chaos.js`** — single shared runtime for companion UI and chaos features. Expects `window.caasControlChaos` from PHP (`wp_localize_script`). Exit early if config is missing; guard with `window.__caasControlChaosInit` so the script initializes once.
+- **`admin/js/caas-control-admin.js`** — CaaS settings screens, user profile (`profile` / `user-edit` when CaaS is enabled). Always binds `.caas-control-tip__trigger` tooltips; maintenance AJAX, pro stub, and media picker require `window.caasControlAdmin` (settings pages only).
 - **`admin/js/caas-control-editor.js`** — block editor extensions; registered on `enqueue_block_editor_assets` when backend chaos is enabled.
 
 Do not add a second global chaos bootstrap; extend `caas-control-chaos.js` or the editor script.
 
 ## Config shape
 
-PHP builds config via `Caas_Control_Settings::chaos_config_for_js()` (camelCase keys: `companionName`, `frequencyMinutes`, `behaviors.*`, `features.*`, `strings`, `proEnabled`). Admin/front merges extra keys:
+PHP builds config via `Caas_Control_Settings::chaos_config_for_js()` (camelCase keys: `agent`, `customImageUrl`, `catImageUrl`, `meowSoundUrl`, `judgingVideoUrl`, `companionName`, `frequencyMinutes`, `durationSeconds`, `behaviors.*`, `features.*`, `strings`, `i18n`, `proEnabled`). Agents in JS: `cat` uses `catImageUrl`; `custom` uses `customImageUrl` when set (`creatureMediaUrl()`). URLs ending in `.mp4`/`.webm`/`.ogg` render as muted looping `<video>` via `appendAgentMedia()`; otherwise `<img>` or emoji fallback.
+
+`behaviors.*` maps PHP `behavior_*` keys to camelCase (`blockMouse`, `randomBlock`, etc.). `features.*` mirrors `enable_*` toggles: `publishGate`, `idleJudgment`, `keyboardTrample`, `redDot`, `fakeSecurity`, `footerPeekaboo`, `pawTrail`, `scrollPost`, `wooCartWiggle`. Notable `strings`: `judgingYou` (sit / idle judgment), `idleJudgment`, `publishGate`, `scrollPost`. Admin/front merges extra keys:
 
 | Key | Typical values |
 |-----|------------------|
-| `context` | `frontend`, `backend`, `block-editor`, `login` |
+| `context` | `frontend`, `backend`, `block-editor`, `login`, `woo_thankyou` |
 | `isAdmin` | boolean |
 | `sidekick` | user meta slug (admin only) |
 | `loginFailed` | true on failed login when login hiss is on |
+| `previewHarness` | true on Global Menace when chaos script loads for previews only (`init()` skips scheduler) |
 
 User-visible copy belongs in PHP `strings` / `i18n` inside `chaos_config_for_js()`, not hard-coded English in JS.
+
+## Meow and audio
+
+- `behavior_meow` maps to `cfg.behaviors.meow`. When on, `meow()` plays bundled `meowSoundUrl` + toast—used for **direct actions** (publish gate, failed login hiss), not for timed walk/sit/follow/block behaviors.
+- Scroll-to-top scratching post calls `playMeowSound()` on click and uses `cfg.strings.scrollPost`.
+
+## Sit and judging
+
+- `behaviorSit()` centers the companion (`.caas-control-creature--sit`), then prefers `playSitJudgingVideo()` using `cfg.judgingVideoUrl` in `.caas-control-judging-media` (hides the creature while the clip plays). Falls back to `strings.judgingYou` toast when no clip exists.
+- Publish gate and idle judgment reuse sit/judging; random scheduler skips new antics while sit judgment is active (`isSitJudgmentActive()`).
+
+## Behavior preview (admin)
+
+- Global Menace: `.caas-control-behavior-preview` → `syncChaosConfigFromForm()` then `window.caasControlPreviewBehavior(slug)`. Slugs: `walk`, `sit`, `follow`, `blockMouse`, `randomBlock`, `meow` (direct meow sound + toast, not scheduler).
+- Requires chaos script on the settings screen (`previewHarness` or full backend chaos). On failure, alert `caasControlAdmin.i18n.previewUnavailable`.
+
+## Chaos UI hooks
+
+| Feature | DOM / classes |
+|---------|----------------|
+| Paw trail | `.caas-control-paw`, CSS var `--caas-paw-rot` |
+| Scroll post | `.caas-control-scroll-post-wrap`, `.caas-control-scroll-post`, `.caas-control-scratch-flake`, `.caas-control-scroll-post-cat`; wrap gets `.is-visible` after scroll threshold; button `.is-scratching` during smooth scroll-to-top |
+| Companion | `.caas-control-creature`, modifiers `--walk`, `--sit`, `--follow`, `--hiss` |
+| Sit judging | `.caas-control-judging-media` (video/img inside) |
+| Toasts / blocks | `.caas-control-toast`, `.caas-control-mouse-block`, `.caas-control-screen-block` |
+
+Custom agent fields on Global Menace: `.caas-control-custom-agent-fields` toggled via `syncCustomAgentFields()` when agent radio is `custom` (scoped under `.caas-control-form`). Media upload `.caas-control-upload-image` requires `wp.media` (only enqueued on settings screens); otherwise alert `caasControlAdmin.i18n.mediaMissing`.
+
+## Admin settings UI
+
+- Tooltips: delegated click on `.caas-control-tip__trigger` toggles `.is-open` on `.caas-control-tip`; document click closes all. Runs even when `caasControlAdmin` is absent (profile screens).
+- Maintenance / pro buttons and `ajaxAction()` require `caasControlAdmin` (early return after tooltip + agent wiring if missing).
 
 ## Admin AJAX
 

@@ -25,12 +25,37 @@ class Caas_Control_Admin {
 	}
 
 	/**
+	 * Info icon with accessible tooltip for settings labels.
+	 *
+	 * @param string $text Help copy (plain text).
+	 */
+	public static function field_tip( string $text ): string {
+		$text = trim( $text );
+		if ( '' === $text ) {
+			return '';
+		}
+
+		$plain = wp_strip_all_tags( $text );
+		$label = sprintf(
+			/* translators: %s: help text */
+			__( 'More information: %s', 'caas-control' ),
+			$plain
+		);
+
+		return sprintf(
+			'<span class="caas-control-tip"><button type="button" class="caas-control-tip__trigger" aria-label="%1$s"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span></button><span class="caas-control-tip__bubble" role="tooltip">%2$s</span></span>',
+			esc_attr( $label ),
+			esc_html( $text )
+		);
+	}
+
+	/**
 	 * Register top-level admin menu and submenus.
 	 */
 	public function register_menu(): void {
 		add_menu_page(
 			__( 'CaaS Control', 'caas-control' ),
-			'🐾 ' . __( 'CaaS Control', 'caas-control' ),
+			__( 'CaaS Control', 'caas-control' ),
 			'manage_options',
 			$this->plugin_name,
 			array( $this, 'render_global_menace_page' ),
@@ -150,19 +175,19 @@ class Caas_Control_Admin {
 	}
 
 	public function enqueue_styles(): void {
-		if ( ! $this->is_plugin_screen() && ! $this->should_load_admin_chaos() ) {
+		if ( ! $this->is_plugin_screen() && ! $this->should_load_admin_chaos() && ! $this->is_user_profile_screen() ) {
 			return;
 		}
 
 		wp_enqueue_style(
 			$this->plugin_name,
 			CAAS_CONTROL_PLUGIN_URL . 'admin/css/caas-control-admin.css',
-			array(),
+			array( 'dashicons' ),
 			$this->version,
 			'all'
 		);
 
-		if ( $this->should_load_admin_chaos() ) {
+		if ( $this->should_load_public_chaos_styles() ) {
 			wp_enqueue_style(
 				$this->plugin_name . '-public-chaos',
 				CAAS_CONTROL_PLUGIN_URL . 'public/css/caas-control-public.css',
@@ -175,17 +200,34 @@ class Caas_Control_Admin {
 
 	public function enqueue_scripts(): void {
 		$on_settings = $this->is_plugin_screen();
+		$on_profile  = $this->is_user_profile_screen();
 
-		if ( $on_settings ) {
-			wp_enqueue_media();
+		$load_chaos           = $this->should_load_admin_chaos();
+		$load_preview_harness = $on_settings && ! $load_chaos;
+
+		if ( $load_chaos ) {
+			$this->enqueue_chaos_script( 'backend', false );
+		} elseif ( $load_preview_harness ) {
+			$this->enqueue_chaos_script( 'backend', true );
+		}
+
+		if ( $on_settings || $on_profile ) {
+			$admin_deps = array( 'jquery' );
+			if ( $load_chaos || $load_preview_harness ) {
+				$admin_deps[] = $this->plugin_name . '-chaos';
+			}
+
 			wp_enqueue_script(
 				$this->plugin_name,
 				CAAS_CONTROL_PLUGIN_URL . 'admin/js/caas-control-admin.js',
-				array( 'jquery' ),
+				$admin_deps,
 				$this->version,
 				true
 			);
+		}
 
+		if ( $on_settings ) {
+			wp_enqueue_media();
 			wp_localize_script(
 				$this->plugin_name,
 				'caasControlAdmin',
@@ -193,15 +235,13 @@ class Caas_Control_Admin {
 					'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 					'nonce'   => wp_create_nonce( 'caas_control_maintenance' ),
 					'i18n'    => array(
-						'working' => __( 'Working…', 'caas-control' ),
-						'proSoon' => __( 'Pro upgrades coming soon—feed the cat in the meantime.', 'caas-control' ),
+						'working'            => __( 'Working…', 'caas-control' ),
+						'proSoon'            => __( 'Pro upgrades coming soon—feed the cat in the meantime.', 'caas-control' ),
+						'mediaMissing'       => __( 'Media library is not available on this screen.', 'caas-control' ),
+						'previewUnavailable' => __( 'Preview could not run. Reload the page and try again.', 'caas-control' ),
 					),
 				)
 			);
-		}
-
-		if ( $this->should_load_admin_chaos() ) {
-			$this->enqueue_chaos_script( 'backend' );
 		}
 
 		if ( $on_settings && $this->is_block_editor_screen() ) {
@@ -231,7 +271,7 @@ class Caas_Control_Admin {
 		// Fallback when block editor assets hook is unavailable.
 	}
 
-	private function enqueue_chaos_script( string $context ): void {
+	private function enqueue_chaos_script( string $context, bool $preview_harness = false ): void {
 		wp_enqueue_script(
 			$this->plugin_name . '-chaos',
 			CAAS_CONTROL_PLUGIN_URL . 'public/js/caas-control-chaos.js',
@@ -249,12 +289,32 @@ class Caas_Control_Admin {
 			array_merge(
 				Caas_Control_Settings::chaos_config_for_js(),
 				array(
-					'context'  => $context,
-					'sidekick' => is_string( $sidekick ) ? $sidekick : 'orange_tabby',
-					'isAdmin'  => true,
+					'context'         => $context,
+					'sidekick'        => is_string( $sidekick ) ? $sidekick : 'orange_tabby',
+					'isAdmin'         => true,
+					'previewHarness'  => $preview_harness,
 				)
 			)
 		);
+	}
+
+	/**
+	 * Preview button for a timed companion behavior (Global Menace).
+	 */
+	public static function behavior_preview_button( string $behavior_slug ): string {
+		return sprintf(
+			'<button type="button" class="button button-small caas-control-behavior-preview" data-caas-behavior="%1$s">%2$s</button>',
+			esc_attr( $behavior_slug ),
+			esc_html__( 'Preview', 'caas-control' )
+		);
+	}
+
+	private function should_load_public_chaos_styles(): bool {
+		if ( $this->should_load_admin_chaos() ) {
+			return true;
+		}
+
+		return $this->is_plugin_screen();
 	}
 
 	private function is_plugin_screen(): bool {
@@ -265,6 +325,18 @@ class Caas_Control_Admin {
 	private function is_block_editor_screen(): bool {
 		$screen = get_current_screen();
 		return $screen && method_exists( $screen, 'is_block_editor' ) && $screen->is_block_editor();
+	}
+
+	/**
+	 * User profile screens (sidekick field tooltips).
+	 */
+	private function is_user_profile_screen(): bool {
+		if ( ! Caas_Control_Settings::is_enabled() ) {
+			return false;
+		}
+
+		$screen = get_current_screen();
+		return $screen && in_array( $screen->base, array( 'profile', 'user-edit' ), true );
 	}
 
 	private function should_load_admin_chaos(): bool {

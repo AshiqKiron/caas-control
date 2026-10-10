@@ -20,6 +20,10 @@ class Caas_Control_Features {
 	 * 404 guilt trip message.
 	 */
 	public function render_404_guilt(): void {
+		if ( ! Caas_Control_Settings::is_enabled() ) {
+			return;
+		}
+
 		$settings = Caas_Control_Settings::get_all();
 		if ( empty( $settings['enable_404_guilt'] ) || ! is_404() ) {
 			return;
@@ -42,6 +46,10 @@ class Caas_Control_Features {
 	 * Login screen hiss after failed attempt.
 	 */
 	public function enqueue_login_assets(): void {
+		if ( ! Caas_Control_Settings::is_enabled() ) {
+			return;
+		}
+
 		$settings = Caas_Control_Settings::get_all();
 		if ( empty( $settings['enable_login_hiss'] ) ) {
 			return;
@@ -91,6 +99,10 @@ class Caas_Control_Features {
 	 * Shutdown: show cat among code if fatal.
 	 */
 	public function maybe_wsod_cat(): void {
+		if ( ! Caas_Control_Settings::is_enabled() ) {
+			return;
+		}
+
 		$error = error_get_last();
 		if ( ! is_array( $error ) ) {
 			return;
@@ -126,6 +138,10 @@ class Caas_Control_Features {
 	 * @param WP_User $user User object.
 	 */
 	public function render_profile_sidekick( WP_User $user ): void {
+		if ( ! Caas_Control_Settings::is_enabled() ) {
+			return;
+		}
+
 		if ( ! current_user_can( 'edit_user', $user->ID ) ) {
 			return;
 		}
@@ -136,20 +152,33 @@ class Caas_Control_Features {
 		}
 
 		$options = array(
-			'orange_tabby'    => __( 'Orange Tabby (High Energy & Chaos)', 'caas-control' ),
-			'tuxedo'          => __( 'Tuxedo Cat (Strict & Professional)', 'caas-control' ),
-			'sleeping_calico' => __( 'Sleeping Calico (Zero Productivity Guaranteed)', 'caas-control' ),
+			'orange_tabby'    => array(
+				'label' => __( 'Orange Tabby (High Energy & Chaos)', 'caas-control' ),
+				'tip'   => __( 'Maximum chaos toasts and frequent interruptions in wp-admin.', 'caas-control' ),
+			),
+			'tuxedo'          => array(
+				'label' => __( 'Tuxedo Cat (Strict & Professional)', 'caas-control' ),
+				'tip'   => __( 'Slightly more restrained messaging when chaos runs in the dashboard.', 'caas-control' ),
+			),
+			'sleeping_calico' => array(
+				'label' => __( 'Sleeping Calico (Zero Productivity Guaranteed)', 'caas-control' ),
+				'tip'   => __( 'Sleepy flavor text—does not disable global chaos by itself.', 'caas-control' ),
+			),
 		);
 		?>
 		<h2><?php esc_html_e( 'CaaS Office Companion', 'caas-control' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<tr>
-				<th><label for="caas_control_sidekick"><? esc_html_e( 'Dashboard sidekick style', 'caas-control' ); ?></label></th>
+				<th>
+					<?php echo Caas_Control_Admin::field_tip( __( 'Saved to this user’s profile and passed to chaos JavaScript as sidekick.', 'caas-control' ) ); ?>
+					<label for="caas_control_sidekick"><?php esc_html_e( 'Dashboard sidekick style', 'caas-control' ); ?></label>
+				</th>
 				<td>
-					<?php foreach ( $options as $key => $label ) : ?>
+					<?php foreach ( $options as $key => $option ) : ?>
 						<label style="display:block;margin-bottom:.5em;">
 							<input type="radio" name="caas_control_sidekick" id="caas_control_sidekick_<?php echo esc_attr( $key ); ?>" value="<?php echo esc_attr( $key ); ?>" <?php checked( $value, $key ); ?> />
-							<?php echo esc_html( $label ); ?>
+							<?php echo Caas_Control_Admin::field_tip( $option['tip'] ); ?>
+							<?php echo esc_html( $option['label'] ); ?>
 						</label>
 					<?php endforeach; ?>
 				</td>
@@ -180,7 +209,7 @@ class Caas_Control_Features {
 	 * WooCommerce order thank-you celebration flag.
 	 */
 	public function woo_order_celebration(): void {
-		if ( ! class_exists( 'WooCommerce' ) ) {
+		if ( ! Caas_Control_Settings::is_enabled() || ! class_exists( 'WooCommerce' ) ) {
 			return;
 		}
 

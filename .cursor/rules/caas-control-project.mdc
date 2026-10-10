@@ -18,17 +18,17 @@ WordPress plugin **Chaos as a Service**: configurable admin dashboard and front-
 | `includes/class-caas-control-features.php` | Cross-cutting WP hooks (404, login, WSOD, profiles, WooCommerce) |
 | `includes/class-caas-control-maintenance.php` | Litter Box tools, AJAX maintenance, admin notices |
 | `includes/class-caas-control-activator.php` / `deactivator.php` | Activation defaults, deactivation |
-| `admin/class-caas-control-admin.php` | Menu, Settings API, asset enqueue, partial renders |
+| `admin/class-caas-control-admin.php` | Menu, Settings API, asset enqueue, partial renders, `field_tip()` help markup |
 | `admin/partials/global-menace.php` | Global Menace settings UI |
 | `admin/partials/litter-box-care.php` | Sidekick + maintenance UI |
 | `admin/partials/pro-breed-shop.php` | Pro toggle / dev shop UI |
 | `admin/css/caas-control-admin.css` | Admin-only settings UI styles |
 | `admin/js/caas-control-admin.js` | Maintenance AJAX, media picker (`caasControlAdmin`) |
 | `admin/js/caas-control-editor.js` | Block editor companion assets |
-| `public/class-caas-control-public.php` | Front-end CSS/JS, scroll-post markup |
+| `public/class-caas-control-public.php` | Front-end CSS/JS, scroll-to-top scratching post markup (agent sprite + sisal post) |
 | `public/js/caas-control-chaos.js` | Shared chaos runtime (admin + front when enabled) |
 | `public/css/caas-control-public.css` | Shared styles |
-| `assets/gpl-cat/` | Default cat sprite and meow audio (GPL) |
+| `assets/gpl-cat/` | Bundled GPL cat media: officer sprite (MP4/WebM/GIF/PNG via `default_cat_media_url()`), sit/judging clip (`judging_video_url()`), meow audio |
 | `languages/` | i18n |
 | `uninstall.php` | Deletes `caas_control_settings` and `caas_control_sidekick` user meta |
 
@@ -49,11 +49,20 @@ Do not register hooks ad hoc in the bootstrap or partials.
 ## Settings and data
 
 - **Site options:** one array option — `Caas_Control_Settings::OPTION_KEY` (`caas_control_settings`). Read with `Caas_Control_Settings::get_all()`; defaults in `defaults()`; all writes go through Settings API sanitize (`Caas_Control_Settings::sanitize()`).
-- **Form context:** partials pass hidden `_form_context` (`menace` or `pro`). Unchecked checkboxes are absent from POST; sanitize merges onto `get_all()`. `menace` updates habitat/behavior/`enable_*` booleans (not `pro_enabled`); `pro` updates only `pro_enabled`.
+- **Master switch:** `caas_enabled` (Global Menace → “Enable CaaS Control”). `Caas_Control_Settings::is_enabled()` gates PHP features, scroll-post markup, and user-profile admin assets. `should_load_chaos()` returns false when disabled.
+- **Agents:** valid values `cat` (bundled GPL Pawtrol officer) and `custom` (URL in `custom_image_url`). Legacy emoji agents (`dog`, `mouse`, etc.) are coerced to `cat` in `get_all()` / `sanitize()`.
+- **Timing:** `frequency_minutes` is one of `5`, `10`, `15` (invalid values reset in `get_all()`); `duration_seconds` is one of `5`, `10`, `30` (validated in `sanitize()`). JS timed behaviors use `durationSeconds` from config.
+- **Bundled media:** `Caas_Control_Settings::bundled_gpl_cat_url()` picks the first readable file under `assets/gpl-cat/`. `default_cat_media_url()` and `judging_video_url()` wrap that for the officer sprite and sit/judging clip. `agent_media_is_video()` drives `<video>` vs `<img>` in PHP (`Caas_Control_Public::echo_agent_sprite()`) and mirrors JS `mediaUrlIsVideo()` / `appendAgentMedia()`.
+- **Toggle groups:** `behavior_*` = timed companion antics (random scheduler in chaos JS). `enable_*` = event-driven features (404, publish gate, paw trail, scroll post, etc.)—wired in `Caas_Control_Features`, `Caas_Control_Public`, or chaos `init()` via `cfg.features.*`.
+- **Form context:** partials pass hidden `_form_context` (`menace` or `pro`). Unchecked checkboxes are absent from POST; sanitize merges onto `get_all()`. `menace` updates `caas_enabled`, habitat/behavior/`enable_*` booleans (not `pro_enabled`); `pro` updates only `pro_enabled`.
 - **Settings groups:** `caas_control_menace` (Global Menace), `caas_control_pro_dev` (Pro & Breed Shop). Both use the same option key and sanitize callback.
 - **Per-user:** `caas_control_sidekick` user meta — Litter Box form (`maybe_save_sidekick()`, nonce `caas_control_sidekick`) and profile UI in `Caas_Control_Features` (not the settings array).
-- **Chaos gating:** `Caas_Control_Settings::should_load_chaos( 'frontend' | 'backend' )` before enqueuing companion assets. Backend also respects `habitat_specific_only`: chaos in wp-admin only on CaaS menu screens and the block editor (see `Caas_Control_Admin::should_load_admin_chaos()`).
-- **JS config:** `Caas_Control_Settings::chaos_config_for_js()` + `Caas_Control_Settings::asset_url()` for bundled GPL cat/meow. Localized as `caasControlChaos` (contexts: `frontend`, `backend`, `block-editor`, `login`). Settings screens also localize `caasControlAdmin` for maintenance AJAX.
+- **Chaos gating:** `Caas_Control_Settings::should_load_chaos( 'frontend' | 'backend' )` before enqueuing companion assets (requires `is_enabled()`). Backend also respects `habitat_specific_only`: chaos in wp-admin only on CaaS menu screens and the block editor (see `Caas_Control_Admin::should_load_admin_chaos()`).
+- **Admin help UI:** settings labels use `Caas_Control_Admin::field_tip( $i18n_text )` (info button + tooltip). Markup: `.caas-control-tip`, `.caas-control-tip__trigger`, `.caas-control-tip__bubble`; open state `.is-open`. Styles in `caas-control-admin.css`; toggle/open behavior in `caas-control-admin.js` (works without `caasControlAdmin` localize).
+- **Admin screens:** CaaS pages use `.wrap.caas-control-admin.caas-control-panel` with `.caas-control-section` blocks. Global Menace settings form adds `.caas-control-form` (scopes agent/custom-field JS). Profile sidekick UI reuses `field_tip()`; admin CSS/JS load on `profile` / `user-edit` when enabled (`Caas_Control_Admin::is_user_profile_screen()`).
+- **Scroll post:** `Caas_Control_Public::render_scroll_post_button()` outputs fixed markup when `is_enabled()` and `enable_scroll_post`; chaos JS enhances the existing button (visibility, scratch animation, scroll-to-top). Gated by master switch even though assets use `should_load_chaos( 'frontend' )`.
+- **Behavior preview (Global Menace):** `Caas_Control_Admin::behavior_preview_button()` outputs `.caas-control-behavior-preview` with `data-caas-behavior` slugs matching chaos JS (`walk`, `sit`, `follow`, `blockMouse`, `randomBlock`, `meow`). Admin enqueues chaos on settings pages even when full backend chaos is off, with `previewHarness: true` so `init()` skips the scheduler but exposes `window.caasControlPreviewBehavior`. Admin JS syncs agent/name/custom URL from the form before preview.
+- **JS config:** `Caas_Control_Settings::chaos_config_for_js()` + asset helpers (`asset_url()`, bundled cat/judging URLs, `meowSoundUrl`). Includes `judgingVideoUrl`, `strings.judgingYou`, `behaviors.*`, `features.*`. Localized as `caasControlChaos` (contexts: `frontend`, `backend`, `block-editor`, `login`; admin may add `previewHarness`, `sidekick`, `isAdmin`). Settings screens also localize `caasControlAdmin` (maintenance AJAX, media upload, preview error strings).
 - **Activation:** `Caas_Control_Activator` adds default `caas_control_settings` if the option is missing.
 
 ## Admin menu
@@ -62,7 +71,8 @@ Top-level slug: `caas-control` (capability `manage_options`). Subpages: same slu
 
 ## Adding behavior
 
-- **New admin UI:** partial under `admin/partials/`, render method on `Caas_Control_Admin`, submenu in `register_menu()` if needed.
+- **New admin UI:** partial under `admin/partials/`, render method on `Caas_Control_Admin`, submenu in `register_menu()` if needed. Use `field_tip()` for non-obvious copy; wrap sections in `.caas-control-section` / `.caas-control-panel` to match Global Menace.
+- **New PHP-only features (404, login, WSOD, Woo, etc.):** early-return with `Caas_Control_Settings::is_enabled()` before reading individual toggles.
 - **New toggles:** add key to `Caas_Control_Settings::defaults()`, sanitize in `sanitize()` (`$bool_keys` or dedicated branch), expose in the right partial, and wire into `chaos_config_for_js()` or PHP feature checks as appropriate.
 - **New front-end/admin JS behavior:** extend `caas-control-chaos.js` or editor/admin scripts (see `.cursor/rules/caas-control-javascript.mdc`); keep strings in PHP i18n via `chaos_config_for_js()` when shown to users.
 - **New WordPress hooks (404, login, etc.):** `Caas_Control_Features` + register in `define_feature_hooks()`.

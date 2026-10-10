@@ -26,6 +26,7 @@ class Caas_Control_Settings {
 	public static function defaults(): array {
 		return array(
 			'version'                 => CAAS_CONTROL_VERSION,
+			'caas_enabled'            => true,
 			'agent'                   => 'cat',
 			'companion_name'          => 'Sir Paws-a-Lot',
 			'frequency_minutes'       => 15,
@@ -37,7 +38,7 @@ class Caas_Control_Settings {
 			'behavior_sit'            => true,
 			'behavior_follow'         => true,
 			'behavior_block_mouse'    => true,
-			'behavior_meow'           => true,
+			'behavior_meow'           => false,
 			'behavior_random_block'   => true,
 			'custom_image_url'        => '',
 			'enable_404_guilt'        => true,
@@ -45,7 +46,7 @@ class Caas_Control_Settings {
 			'enable_idle_judgment'    => true,
 			'enable_login_hiss'       => true,
 			'enable_keyboard_trample' => true,
-			'enable_red_dot'          => true,
+			'enable_red_dot'          => false,
 			'enable_fake_security'    => true,
 			'enable_footer_peekaboo'  => true,
 			'enable_paw_trail'        => false,
@@ -64,7 +65,18 @@ class Caas_Control_Settings {
 			$stored = array();
 		}
 
-		return array_merge( self::defaults(), $stored );
+		$merged = array_merge( self::defaults(), $stored );
+		$agents = array( 'cat', 'custom' );
+		if ( ! in_array( $merged['agent'], $agents, true ) ) {
+			$merged['agent'] = 'cat';
+		}
+
+		$allowed_freq = array( 5, 10, 15 );
+		if ( ! in_array( (int) $merged['frequency_minutes'], $allowed_freq, true ) ) {
+			$merged['frequency_minutes'] = self::defaults()['frequency_minutes'];
+		}
+
+		return $merged;
 	}
 
 	/**
@@ -79,8 +91,8 @@ class Caas_Control_Settings {
 		$form_context = isset( $value['_form_context'] ) ? sanitize_key( $value['_form_context'] ) : 'menace';
 		unset( $value['_form_context'] );
 
-		$agents = array( 'cat', 'dog', 'mouse', 'horse', 'rat', 'custom' );
-		$freq   = array( 5, 10, 15, 0 );
+		$agents = array( 'cat', 'custom' );
+		$freq   = array( 5, 10, 15 );
 		$dur    = array( 5, 10, 30 );
 
 		$out = self::get_all();
@@ -102,6 +114,7 @@ class Caas_Control_Settings {
 		}
 
 		$bool_keys = array(
+			'caas_enabled',
 			'habitat_frontend',
 			'habitat_backend',
 			'habitat_specific_only',
@@ -144,9 +157,20 @@ class Caas_Control_Settings {
 	}
 
 	/**
+	 * Whether CaaS chaos and features are active site-wide.
+	 */
+	public static function is_enabled(): bool {
+		return ! empty( self::get_all()['caas_enabled'] );
+	}
+
+	/**
 	 * Whether chaos assets should load in the current context.
 	 */
 	public static function should_load_chaos( string $context ): bool {
+		if ( ! self::is_enabled() ) {
+			return false;
+		}
+
 		$s = self::get_all();
 
 		if ( $context === 'backend' ) {
@@ -168,6 +192,50 @@ class Caas_Control_Settings {
 	}
 
 	/**
+	 * First readable bundled file under assets/gpl-cat/.
+	 *
+	 * @param list<string> $filenames Basename order (first match wins).
+	 */
+	public static function bundled_gpl_cat_url( array $filenames ): string {
+		$base = CAAS_CONTROL_PLUGIN_DIR . 'assets/gpl-cat/';
+		foreach ( $filenames as $file ) {
+			if ( is_readable( $base . $file ) ) {
+				return self::asset_url( 'gpl-cat/' . $file );
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Default Pawtrol officer sprite (prefers MP4/WebM, then GIF, then PNG).
+	 */
+	public static function default_cat_media_url(): string {
+		$url = self::bundled_gpl_cat_url(
+			array( 'gpl-cat.mp4', 'gpl-cat.webm', 'gpl-cat.gif', 'gpl-cat.png' )
+		);
+		if ( $url !== '' ) {
+			return $url;
+		}
+
+		return self::asset_url( 'gpl-cat/gpl-cat.png' );
+	}
+
+	/**
+	 * Whether a media URL should render as HTML video (not GIF/static image).
+	 */
+	public static function agent_media_is_video( string $url ): bool {
+		return (bool) preg_match( '/\.(mp4|webm|ogg)(\?|#|$)/i', $url );
+	}
+
+	/**
+	 * Bundled sit-and-judge clip (prefers MP4/WebM when present).
+	 */
+	public static function judging_video_url(): string {
+		return self::bundled_gpl_cat_url( array( 'judging.mp4', 'judging.webm', 'judging.gif' ) );
+	}
+
+	/**
 	 * Config blob for JavaScript.
 	 *
 	 * @return array<string, mixed>
@@ -181,8 +249,9 @@ class Caas_Control_Settings {
 			'frequencyMinutes'   => (int) $s['frequency_minutes'],
 			'durationSeconds'    => (int) $s['duration_seconds'],
 			'customImageUrl'     => $s['custom_image_url'],
-			'catImageUrl'        => self::asset_url( 'gpl-cat/gpl-cat.png' ),
+			'catImageUrl'        => self::default_cat_media_url(),
 			'meowSoundUrl'       => self::asset_url( 'gpl-cat/meow.ogg' ),
+			'judgingVideoUrl'    => self::judging_video_url(),
 			'behaviors'          => array(
 				'walk'         => (bool) $s['behavior_walk'],
 				'sit'          => (bool) $s['behavior_sit'],
@@ -208,6 +277,12 @@ class Caas_Control_Settings {
 				'idleJudgment'   => __( 'You\'ve been a sitting duck on this page for 15 minutes. Move on, fella.', 'caas-control' ),
 				'fakeSecurity'   => __( 'Suspicious mouse movement detected!', 'caas-control' ),
 				'seoRejection'   => __( 'Fill out your SEO meta description before I let you publish.', 'caas-control' ),
+				'scrollPost'     => __( 'Scramble!', 'caas-control' ),
+				'judgingYou'     => sprintf(
+					/* translators: %s: companion display name */
+					__( '%s is judging you.', 'caas-control' ),
+					$s['companion_name']
+				),
 			),
 			'i18n'               => array(
 				'meow' => __( 'Meow!', 'caas-control' ),

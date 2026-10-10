@@ -68,11 +68,53 @@ class Caas_Control_Public {
 	 * Scroll-to-top scratching post markup.
 	 */
 	public function render_scroll_post_button(): void {
+		if ( ! Caas_Control_Settings::is_enabled() ) {
+			return;
+		}
+
 		$settings = Caas_Control_Settings::get_all();
 		if ( empty( $settings['enable_scroll_post'] ) ) {
 			return;
 		}
 
-		echo '<button type="button" class="caas-control-scroll-post" aria-label="' . esc_attr__( 'Back to top', 'caas-control' ) . '"><span class="caas-control-scroll-post-icon" aria-hidden="true">🐾</span></button>';
+		$agent = isset( $settings['agent'] ) ? (string) $settings['agent'] : 'cat';
+
+		echo '<div class="caas-control-scroll-post-wrap">';
+		echo '<button type="button" class="caas-control-scroll-post" aria-label="' . esc_attr__( 'Back to top', 'caas-control' ) . '">';
+		echo '<span class="caas-control-scroll-post-cat" aria-hidden="true">';
+
+		if ( 'custom' === $agent && ! empty( $settings['custom_image_url'] ) ) {
+			self::echo_agent_sprite( (string) $settings['custom_image_url'], 52 );
+		} elseif ( 'cat' === $agent ) {
+			self::echo_agent_sprite( Caas_Control_Settings::default_cat_media_url(), 52 );
+		} else {
+			echo '🐈';
+		}
+
+		echo '</span>';
+		echo '<span class="caas-control-scroll-post-sisal" aria-hidden="true"></span>';
+		echo '<span class="caas-control-scroll-post-icon" aria-hidden="true">🐾</span>';
+		echo '</button>';
+		echo '</div>';
+	}
+
+	/**
+	 * Inline sprite for scroll-post markup (image, GIF, or muted looping video).
+	 */
+	private static function echo_agent_sprite( string $url, int $size ): void {
+		if ( Caas_Control_Settings::agent_media_is_video( $url ) ) {
+			printf(
+				'<video src="%1$s" width="%2$d" height="%2$d" muted playsinline autoplay loop aria-hidden="true"></video>',
+				esc_url( $url ),
+				$size
+			);
+			return;
+		}
+
+		printf(
+			'<img src="%1$s" alt="" width="%2$d" height="%2$d" />',
+			esc_url( $url ),
+			$size
+		);
 	}
 }

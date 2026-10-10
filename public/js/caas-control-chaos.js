@@ -5,22 +5,27 @@
 	if (!cfg) {
 		return;
 	}
+	if (window.__caasControlChaosInit) {
+		return;
+	}
+	window.__caasControlChaosInit = true;
 
 	var AGENT_EMOJI = {
 		cat: '🐈',
-		dog: '🐕',
-		mouse: '🐁',
-		horse: '🐎',
-		rat: '🐀',
-		custom: '🖼️',
 	};
 
 	var creatureEl = null;
 	var followRaf = null;
 	var chaosTimer = null;
 	var meowAudio = null;
+	var sitActive = false;
+	var sitAutoTimer = null;
+	var behaviorEndTimer = null;
+	var publishGateResumeTimer = null;
+	var publishGateBtn = null;
+	var sitMediaWrap = null;
 
-	function creatureImageUrl() {
+	function creatureMediaUrl() {
 		if (cfg.agent === 'custom' && cfg.customImageUrl) {
 			return cfg.customImageUrl;
 		}
@@ -30,8 +35,36 @@
 		return '';
 	}
 
+	function mediaUrlIsVideo(url) {
+		return /\.(mp4|webm|ogg)(\?|#|$)/i.test(url);
+	}
+
+	function appendAgentMedia(parent, url, alt) {
+		alt = alt || '';
+		if (mediaUrlIsVideo(url)) {
+			var video = document.createElement('video');
+			video.src = url;
+			video.muted = true;
+			video.playsInline = true;
+			video.autoplay = true;
+			video.loop = true;
+			video.setAttribute('aria-label', alt);
+			parent.appendChild(video);
+			var playPromise = video.play();
+			if (playPromise && typeof playPromise.catch === 'function') {
+				playPromise.catch(function () {});
+			}
+			return video;
+		}
+		var img = document.createElement('img');
+		img.src = url;
+		img.alt = alt;
+		parent.appendChild(img);
+		return img;
+	}
+
 	function agentGlyph() {
-		if (creatureImageUrl()) {
+		if (creatureMediaUrl()) {
 			return null;
 		}
 		return AGENT_EMOJI[cfg.agent] || AGENT_EMOJI.cat;
@@ -50,14 +83,75 @@
 		if (glyph) {
 			creatureEl.textContent = glyph;
 		} else {
-			var img = document.createElement('img');
-			img.src = creatureImageUrl();
-			img.alt = cfg.companionName || '';
-			creatureEl.appendChild(img);
+			appendAgentMedia(creatureEl, creatureMediaUrl(), cfg.companionName || '');
 		}
 
 		document.body.appendChild(creatureEl);
 		return creatureEl;
+	}
+
+	function isSitJudgmentActive() {
+		return sitActive || !!publishGateResumeTimer;
+	}
+
+	function clearSitUi() {
+		if (sitAutoTimer) {
+			window.clearTimeout(sitAutoTimer);
+			sitAutoTimer = null;
+		}
+		removeSitMedia();
+	}
+
+	function sitJudgingAriaLabel() {
+		return (
+			(cfg.strings && cfg.strings.judgingYou) ||
+			(cfg.companionName || 'Companion') + ' is judging you.'
+		);
+	}
+
+	function removeSitMedia() {
+		if (sitMediaWrap && sitMediaWrap.parentNode) {
+			sitMediaWrap.parentNode.removeChild(sitMediaWrap);
+		}
+		sitMediaWrap = null;
+		if (creatureEl) {
+			creatureEl.style.display = '';
+		}
+	}
+
+	function playSitJudgingVideo() {
+		var url = cfg.judgingVideoUrl;
+		if (!url) {
+			return false;
+		}
+		removeSitMedia();
+		var wrap = document.createElement('div');
+		wrap.className = 'caas-control-judging-media';
+		wrap.setAttribute('role', 'group');
+		wrap.setAttribute('aria-label', sitJudgingAriaLabel());
+
+		appendAgentMedia(wrap, url, sitJudgingAriaLabel());
+		document.body.appendChild(wrap);
+		sitMediaWrap = wrap;
+		if (creatureEl) {
+			creatureEl.style.display = 'none';
+		}
+		return true;
+	}
+
+	function cancelPublishGate() {
+		if (publishGateResumeTimer) {
+			window.clearTimeout(publishGateResumeTimer);
+			publishGateResumeTimer = null;
+		}
+		publishGateBtn = null;
+	}
+
+	function cancelBehaviorEndTimer() {
+		if (behaviorEndTimer) {
+			window.clearTimeout(behaviorEndTimer);
+			behaviorEndTimer = null;
+		}
 	}
 
 	function removeCreature() {
@@ -65,6 +159,8 @@
 			cancelAnimationFrame(followRaf);
 			followRaf = null;
 		}
+		clearSitUi();
+		sitActive = false;
 		if (creatureEl && creatureEl.parentNode) {
 			creatureEl.parentNode.removeChild(creatureEl);
 		}
@@ -111,6 +207,7 @@
 	}
 
 	function behaviorWalk() {
+		clearSitUi();
 		var el = ensureCreature();
 		el.className = 'caas-control-creature caas-control-creature--walk';
 		var start = window.innerWidth + 40;
@@ -124,17 +221,27 @@
 				removeCreature();
 			}
 		}, 16);
-		meow();
 	}
 
-	function behaviorSit() {
+	function behaviorSit(opts) {
+		opts = opts || {};
+		clearSitUi();
+		sitActive = true;
 		var el = ensureCreature();
 		el.className = 'caas-control-creature caas-control-creature--sit';
-		el.style.transform = 'translate(' + (window.innerWidth / 2 - 30) + 'px, ' + (window.innerHeight / 2) + 'px)';
-		toast((cfg.companionName || 'Companion') + ' is judging you.', 2500);
+		el.style.transform =
+			'translate(' + (window.innerWidth / 2 - 30) + 'px, ' + (window.innerHeight / 2) + 'px)';
+		if (!playSitJudgingVideo()) {
+			toast(sitJudgingAriaLabel(), 2500);
+		}
+
+		if (!opts.skipAutoTimer) {
+			sitAutoTimer = window.setTimeout(removeCreature, (cfg.durationSeconds || 5) * 1000);
+		}
 	}
 
 	function behaviorFollow() {
+		clearSitUi();
 		var el = ensureCreature();
 		el.className = 'caas-control-creature caas-control-creature--follow';
 		function onMove(e) {
@@ -159,7 +266,6 @@
 				blocker.parentNode.removeChild(blocker);
 			}
 		}, 1200);
-		meow();
 	}
 
 	function behaviorRandomBlock() {
@@ -175,6 +281,9 @@
 	}
 
 	function runRandomBehavior() {
+		if (isSitJudgmentActive()) {
+			return;
+		}
 		var pool = [];
 		var b = cfg.behaviors || {};
 		if (b.walk) {
@@ -195,18 +304,20 @@
 		if (!pool.length) {
 			return;
 		}
-		pool[Math.floor(Math.random() * pool.length)]();
-		setTimeout(removeCreature, ((cfg.durationSeconds || 5) + 1) * 1000);
+		cancelBehaviorEndTimer();
+		var chosen = pool[Math.floor(Math.random() * pool.length)];
+		chosen();
+		if (chosen !== behaviorSit) {
+			behaviorEndTimer = window.setTimeout(function () {
+				behaviorEndTimer = null;
+				removeCreature();
+			}, ((cfg.durationSeconds || 5) + 1) * 1000);
+		}
 	}
 
 	function scheduleChaos() {
-		var minutes = cfg.frequencyMinutes;
-		var ms;
-		if (minutes === 0) {
-			ms = (120 + Math.random() * 180) * 1000;
-		} else {
-			ms = minutes * 60 * 1000;
-		}
+		var minutes = cfg.frequencyMinutes || 15;
+		var ms = minutes * 60 * 1000;
 		if (chaosTimer) {
 			clearTimeout(chaosTimer);
 		}
@@ -252,12 +363,21 @@
 				}
 				e.preventDefault();
 				e.stopPropagation();
+				cancelPublishGate();
 				var msg = cfg.strings.publishGate || 'Cat is reviewing your changes.';
-				toast(msg, 10000);
-				behaviorSit();
-				setTimeout(function () {
-					btn.click();
-				}, 10000);
+				var gateMs = 10000;
+				toast(msg, gateMs);
+				behaviorSit({ skipAutoTimer: true });
+				publishGateBtn = btn;
+				publishGateResumeTimer = window.setTimeout(function () {
+					publishGateResumeTimer = null;
+					var target = publishGateBtn;
+					publishGateBtn = null;
+					removeCreature();
+					if (target) {
+						target.click();
+					}
+				}, gateMs);
 			},
 			true
 		);
@@ -302,7 +422,6 @@
 				})
 			);
 			toast('Paws on keyboard!', 2000);
-			meow();
 			idle = Date.now();
 		}, 30000);
 	}
@@ -345,13 +464,14 @@
 		}
 		var peek = document.createElement('div');
 		peek.className = 'caas-control-peekaboo';
-		if (cfg.agent === 'cat' && cfg.catImageUrl) {
-			var peekImg = document.createElement('img');
-			peekImg.src = cfg.catImageUrl;
-			peekImg.alt = '';
-			peekImg.width = 56;
-			peekImg.height = 56;
-			peek.appendChild(peekImg);
+		var peekUrl =
+			cfg.agent === 'custom' && cfg.customImageUrl
+				? cfg.customImageUrl
+				: cfg.agent === 'cat' && cfg.catImageUrl
+					? cfg.catImageUrl
+					: '';
+		if (peekUrl) {
+			appendAgentMedia(peek, peekUrl, cfg.companionName || '');
 		} else {
 			peek.textContent = '🐱';
 		}
@@ -362,7 +482,6 @@
 			if (nearBottom && !shown) {
 				shown = true;
 				peek.classList.add('is-visible');
-				meow();
 				setTimeout(function () {
 					peek.classList.remove('is-visible');
 					shown = false;
@@ -378,15 +497,17 @@
 		document.addEventListener('mousemove', function (e) {
 			var p = document.createElement('span');
 			p.className = 'caas-control-paw';
+			p.setAttribute('aria-hidden', 'true');
 			p.textContent = '🐾';
 			p.style.left = e.clientX + 'px';
 			p.style.top = e.clientY + 'px';
+			p.style.setProperty('--caas-paw-rot', Math.floor(Math.random() * 50 - 25) + 'deg');
 			document.body.appendChild(p);
 			setTimeout(function () {
 				if (p.parentNode) {
 					p.parentNode.removeChild(p);
 				}
-			}, 1200);
+			}, 1400);
 		});
 	}
 
@@ -394,13 +515,81 @@
 		if (!cfg.features || !cfg.features.scrollPost) {
 			return;
 		}
+		var wrap = document.querySelector('.caas-control-scroll-post-wrap');
 		var btn = document.querySelector('.caas-control-scroll-post');
 		if (!btn) {
 			return;
 		}
+
+		var showThreshold = 280;
+		function updateVisibility() {
+			var visible = window.scrollY > showThreshold;
+			if (wrap) {
+				wrap.classList.toggle('is-visible', visible);
+			} else {
+				btn.classList.toggle('is-visible', visible);
+			}
+		}
+
+		window.addEventListener('scroll', updateVisibility, { passive: true });
+		updateVisibility();
+
+		var scratching = false;
+		var scratchInterval = null;
+		var endCheck = null;
+		var scratchTimeout = null;
+
+		function stopScratch() {
+			scratching = false;
+			btn.classList.remove('is-scratching');
+			if (scratchInterval) {
+				window.clearInterval(scratchInterval);
+				scratchInterval = null;
+			}
+			if (endCheck) {
+				window.clearInterval(endCheck);
+				endCheck = null;
+			}
+			if (scratchTimeout) {
+				window.clearTimeout(scratchTimeout);
+				scratchTimeout = null;
+			}
+		}
+
+		function spawnScratchMark() {
+			var rect = btn.getBoundingClientRect();
+			var mark = document.createElement('span');
+			mark.className = 'caas-control-scratch-flake';
+			mark.setAttribute('aria-hidden', 'true');
+			mark.textContent = '✦';
+			mark.style.left = rect.left + 10 + Math.random() * (rect.width - 20) + 'px';
+			mark.style.top = rect.top + 18 + Math.random() * (rect.height - 28) + 'px';
+			document.body.appendChild(mark);
+			window.setTimeout(function () {
+				if (mark.parentNode) {
+					mark.parentNode.removeChild(mark);
+				}
+			}, 600);
+		}
+
 		btn.addEventListener('click', function () {
+			if (scratching) {
+				return;
+			}
+			scratching = true;
+			btn.classList.add('is-scratching');
+			playMeowSound();
+			toast((cfg.strings && cfg.strings.scrollPost) || 'Scramble!', 1500);
+			spawnScratchMark();
+			scratchInterval = window.setInterval(spawnScratchMark, 110);
 			window.scrollTo({ top: 0, behavior: 'smooth' });
-			toast('Scramble!', 1500);
+
+			endCheck = window.setInterval(function () {
+				if (window.scrollY <= 2) {
+					stopScratch();
+				}
+			}, 40);
+			scratchTimeout = window.setTimeout(stopScratch, 8000);
 		});
 	}
 
@@ -425,7 +614,36 @@
 		behaviorWalk();
 	}
 
+	function previewMeowDirect() {
+		playMeowSound();
+		toast((cfg.i18n && cfg.i18n.meow) || 'Meow!', 2000);
+	}
+
+	var previewHandlers = {
+		walk: behaviorWalk,
+		sit: behaviorSit,
+		follow: behaviorFollow,
+		blockMouse: behaviorBlockMouse,
+		randomBlock: behaviorRandomBlock,
+		meow: previewMeowDirect,
+	};
+
+	window.caasControlPreviewBehavior = function (name) {
+		var fn = previewHandlers[name];
+		if (!fn) {
+			return false;
+		}
+		cancelBehaviorEndTimer();
+		cancelPublishGate();
+		removeCreature();
+		fn();
+		return true;
+	};
+
 	function init() {
+		if (cfg.previewHarness) {
+			return;
+		}
 		if (cfg.loginFailed) {
 			loginHiss();
 			meow();

@@ -22,9 +22,42 @@
 	font-size: 1.1em;
 }
 
+.caas-control-companion-name-input {
+	width: 20em;
+	max-width: 100%;
+}
+
+.caas-control-custom-image-url {
+	max-width: 100%;
+	width: 28em;
+	margin-right: 8px;
+	vertical-align: middle;
+}
+
+.caas-control-custom-agent-fields.is-hidden {
+	display: none;
+}
+
 .caas-control-agents .caas-control-agent-option {
 	display: inline-block;
-	margin: 0 16px 8px 0;
+	margin: 0 16px 0 0;
+}
+
+.caas-control-behavior-option {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	margin-bottom: 6px;
+}
+
+.caas-control-behavior-option label {
+	flex: 1 1 auto;
+	margin: 0;
+}
+
+.caas-control-behavior-preview {
+	flex-shrink: 0;
 }
 
 .caas-control-card {
@@ -75,4 +108,100 @@
 	padding: 12px;
 	background: #f6f7f7;
 	border-radius: 4px;
+}
+
+/* Settings field info tooltips */
+.caas-control-tip {
+	position: relative;
+	display: inline-block;
+	vertical-align: middle;
+	margin-right: 4px;
+	line-height: 1;
+}
+
+.caas-control-tip__trigger {
+	border: none;
+	background: transparent;
+	cursor: help;
+	padding: 0;
+	margin: 0;
+	line-height: 1;
+	color: #787c82;
+	vertical-align: middle;
+}
+
+.caas-control-tip__trigger .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+}
+
+.caas-control-tip__trigger:hover,
+.caas-control-tip__trigger:focus {
+	color: #2271b1;
+	outline: 1px solid transparent;
+}
+
+.caas-control-tip__trigger:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 1px;
+	border-radius: 2px;
+}
+
+.caas-control-tip__bubble {
+	visibility: hidden;
+	opacity: 0;
+	position: absolute;
+	z-index: 100000;
+	left: 50%;
+	bottom: calc(100% + 8px);
+	transform: translateX(-50%);
+	width: max-content;
+	max-width: 280px;
+	padding: 8px 10px;
+	font-size: 12px;
+	font-weight: normal;
+	line-height: 1.45;
+	color: #1d2327;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+	pointer-events: none;
+	transition: opacity 0.12s ease, visibility 0.12s ease;
+	text-align: left;
+	white-space: normal;
+}
+
+.caas-control-tip__bubble::after {
+	content: "";
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	margin-left: -6px;
+	border: 6px solid transparent;
+	border-top-color: #c3c4c7;
+}
+
+.caas-control-tip:hover .caas-control-tip__bubble,
+.caas-control-tip:focus-within .caas-control-tip__bubble,
+.caas-control-tip.is-open .caas-control-tip__bubble {
+	visibility: visible;
+	opacity: 1;
+}
+
+.caas-control-panel .form-table th .caas-control-tip {
+	vertical-align: text-top;
+}
+
+.caas-control-agent-option,
+.caas-control-sidekick-option {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.caas-control-agent-option .caas-control-tip,
+.caas-control-sidekick-option .caas-control-tip {
+	margin-right: 2px;
 }

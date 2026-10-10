@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 ```
 
-Partials may use `defined( 'ABSPATH' ) || exit;` on one line.
+Partials may use `defined( 'ABSPATH' ) || exit;` on one line. In partials, use full `<?php … ?>` for template helpers (`checked`, `selected`, `esc_html_e`, etc.)—do not rely on short open tags.
 
 ## Security
 
@@ -41,13 +41,28 @@ Wrap user-visible strings: `__( '...', 'caas-control' )`, `_e`, `esc_html_e`, et
 
 ## Assets
 
-Enqueue only when settings allow (`Caas_Control_Settings::should_load_chaos()`) and on relevant screens. Admin: plugin CSS/JS on CaaS menu pages; chaos CSS/JS when `should_load_admin_chaos()` passes (includes `habitat_specific_only` + block editor). Pass `$this->version` for cache busting. Localize chaos with `chaos_config_for_js()` plus `context`, `isAdmin`, and `sidekick` where applicable. Scripts that need `wp.ajax` or DOM helpers should list dependencies (e.g. `array( 'jquery' )`) instead of an empty array.
+Enqueue only when settings allow (`Caas_Control_Settings::is_enabled()` and `should_load_chaos()`) on relevant screens. Admin: plugin CSS/JS on CaaS menu pages; same admin JS/CSS on user profile screens when CaaS is enabled (tooltips on sidekick fields). Admin plugin CSS lists `dashicons` as a dependency. On CaaS settings pages, enqueue public chaos CSS when admin chaos or the behavior **preview harness** loads (`should_load_public_chaos_styles()`). Chaos JS when `should_load_admin_chaos()` passes (includes `habitat_specific_only` + block editor), or on settings-only preview with `previewHarness: true` in localized config. Pass `$this->version` for cache busting. Localize chaos with `chaos_config_for_js()` plus `context`, `isAdmin`, `sidekick`, and `previewHarness` where applicable. `caasControlAdmin` is localized only on CaaS settings screens (maintenance nonce, media upload, preview strings). Admin JS depends on chaos script when preview or full admin chaos is active. Scripts that need `wp.ajax` or DOM helpers should list dependencies (e.g. `array( 'jquery' )`) instead of an empty array.
+
+## Settings UI helpers
+
+- Field help: `Caas_Control_Admin::field_tip( __( '...', 'caas-control' ) )` before labels in partials and profile sidekick UI. Plain text only; escaped in the helper. Place tip before visible label text so screen readers get “More information” via the button `aria-label`.
+- Global Menace: wrap the options form in `.caas-control-form`; section headings in `.caas-control-section` inside `.caas-control-panel`.
+- Behavior preview: `Caas_Control_Admin::behavior_preview_button( $slug )` beside timed-behavior checkboxes; `$slug` must match chaos preview handlers (`blockMouse`, `randomBlock`, etc.).
+
+## Bundled agent media
+
+- Resolve URLs with `Caas_Control_Settings::bundled_gpl_cat_url()`, `default_cat_media_url()`, and `judging_video_url()`—do not hard-code a single PNG path when adding bundled assets.
+- Use `agent_media_is_video( $url )` before outputting scroll-post or inline sprites; prefer `Caas_Control_Public::echo_agent_sprite()` pattern (`<video muted playsinline autoplay loop>` vs `<img>`).
+- Expose new bundled clips/sounds through `chaos_config_for_js()` (e.g. `judgingVideoUrl`, `meowSoundUrl`) rather than new localize blobs.
 
 ## Settings
 
 - Do not call `update_option` for plugin toggles from random code paths; use Settings API groups in admin or extend `Caas_Control_Settings::sanitize()`.
+- Feature hooks and front-end markup that are not covered by `should_load_chaos()` must still respect `Caas_Control_Settings::is_enabled()` (master off = no 404 guilt, login hiss, scroll post, etc.).
 - Exception: per-user sidekick uses `update_user_meta( …, 'caas_control_sidekick', … )` via `maybe_save_sidekick()` or profile save handlers in `Caas_Control_Features`.
 - New boolean settings belong in `defaults()`, `$bool_keys` (or a form-context branch), the matching admin partial, and `chaos_config_for_js()` when the front end needs them.
+- `caas_enabled` is in `$bool_keys` for the `menace` form context only; sanitize always merges onto existing options so Pro saves do not wipe the master switch.
+- Sanitize allowed enums: `agent` (`cat`|`custom`), `frequency_minutes` (5|10|15), `duration_seconds` (5|10|30).
 
 ## Types and style
 
