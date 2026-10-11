@@ -19,12 +19,15 @@ class Caas_Control_Settings {
 	public const OPTION_KEY = 'caas_control_settings';
 
 	private const DURATION_SECONDS_MIN  = 5;
-	private const DURATION_SECONDS_MAX  = 300;
+	private const DURATION_SECONDS_MAX  = 600;
 	private const DURATION_SECONDS_STEP = 5;
 
-	private const APPEAR_AFTER_SECONDS_MIN  = 0;
-	private const APPEAR_AFTER_SECONDS_MAX  = 900;
-	private const APPEAR_AFTER_SECONDS_STEP = 5;
+	private const APPEAR_AFTER_SECONDS_MIN  = 300;
+	private const APPEAR_AFTER_SECONDS_MAX  = 18000;
+	private const APPEAR_AFTER_SECONDS_STEP = 300;
+
+	/** Above this many whole minutes, appear-after labels use "X hour Y mins". */
+	private const APPEAR_AFTER_HOUR_LABEL_ABOVE_MINUTES = 55;
 
 	/**
 	 * Default option values.
@@ -100,13 +103,9 @@ class Caas_Control_Settings {
 		$step = self::APPEAR_AFTER_SECONDS_STEP;
 
 		$seconds = max( $min, min( $max, $seconds ) );
-		if ( 0 === $seconds ) {
-			return 0;
-		}
-
 		$snapped = (int) ( round( $seconds / $step ) * $step );
 
-		return max( $step, min( $max, $snapped ) );
+		return max( $min, min( $max, $snapped ) );
 	}
 
 	public static function appear_after_seconds_min(): int {
@@ -122,19 +121,12 @@ class Caas_Control_Settings {
 	}
 
 	/**
-	 * Admin appear-after slider label (0 = immediately; otherwise same rules as duration).
+	 * Admin appear-after slider label (5-minute steps from 5 minutes through 5 hours).
 	 *
 	 * @return array{display: string, use_seconds_suffix: bool}
 	 */
 	public static function appear_after_slider_display( int $seconds ): array {
 		$seconds = self::normalize_appear_after_seconds( $seconds );
-
-		if ( 0 === $seconds ) {
-			return array(
-				'display'            => __( 'Immediately', 'caas-control' ),
-				'use_seconds_suffix' => false,
-			);
-		}
 
 		if ( $seconds < 60 ) {
 			return array(
@@ -144,14 +136,27 @@ class Caas_Control_Settings {
 		}
 
 		$mins = (int) floor( $seconds / 60 );
-		$secs = $seconds % 60;
+
+		if ( $mins > self::APPEAR_AFTER_HOUR_LABEL_ABOVE_MINUTES ) {
+			$hours    = intdiv( $mins, 60 );
+			$rem_mins = $mins % 60;
+
+			return array(
+				'display'            => sprintf(
+					/* translators: 1: whole hours, 2: remaining minutes */
+					__( '%1$s hour %2$s mins', 'caas-control' ),
+					(string) $hours,
+					(string) $rem_mins
+				),
+				'use_seconds_suffix' => false,
+			);
+		}
 
 		return array(
 			'display'            => sprintf(
-				/* translators: 1: minutes, 2: remaining seconds */
-				__( '%1$s mins %2$s seconds', 'caas-control' ),
-				(string) $mins,
-				(string) $secs
+				/* translators: %s: whole minutes */
+				__( '%s mins', 'caas-control' ),
+				(string) $mins
 			),
 			'use_seconds_suffix' => false,
 		);
@@ -165,6 +170,13 @@ class Caas_Control_Settings {
 	public static function duration_slider_display( int $seconds ): array {
 		$seconds = self::normalize_duration_seconds( $seconds );
 
+		if ( $seconds >= self::DURATION_SECONDS_MAX ) {
+			return array(
+				'display'            => __( 'Until your cry - 10 mins', 'caas-control' ),
+				'use_seconds_suffix' => false,
+			);
+		}
+
 		if ( $seconds < 60 ) {
 			return array(
 				'display'              => (string) $seconds,
@@ -174,6 +186,17 @@ class Caas_Control_Settings {
 
 		$mins = (int) floor( $seconds / 60 );
 		$secs = $seconds % 60;
+
+		if ( 0 === $secs ) {
+			return array(
+				'display'              => sprintf(
+					/* translators: %s: whole minutes */
+					__( '%s mins', 'caas-control' ),
+					(string) $mins
+				),
+				'use_seconds_suffix'   => false,
+			);
+		}
 
 		return array(
 			'display'              => sprintf(
@@ -329,7 +352,9 @@ class Caas_Control_Settings {
 	 * Public URL for a file under the plugin assets/ directory.
 	 */
 	public static function asset_url( string $relative_path ): string {
-		return CAAS_CONTROL_PLUGIN_URL . 'assets/' . ltrim( $relative_path, '/' );
+		$url = plugins_url( 'assets/' . ltrim( $relative_path, '/' ), CAAS_CONTROL_PLUGIN_FILE );
+
+		return $url ? esc_url_raw( $url ) : '';
 	}
 
 	/**
@@ -355,11 +380,7 @@ class Caas_Control_Settings {
 		$url = self::bundled_gpl_cat_url(
 			array( 'gpl-cat.mp4', 'gpl-cat.webm', 'gpl-cat.gif', 'gpl-cat.png' )
 		);
-		if ( $url !== '' ) {
-			return $url;
-		}
-
-		return self::asset_url( 'gpl-cat/gpl-cat.png' );
+		return $url;
 	}
 
 	/**
@@ -373,7 +394,12 @@ class Caas_Control_Settings {
 	 * Bundled sit-and-judge clip (prefers MP4/WebM when present).
 	 */
 	public static function judging_video_url(): string {
-		return self::bundled_gpl_cat_url( array( 'judging.mp4', 'judging.webm', 'judging.gif' ) );
+		$url = self::bundled_gpl_cat_url( array( 'judging.mp4', 'judging.webm', 'judging.gif' ) );
+		if ( $url !== '' ) {
+			return $url;
+		}
+
+		return self::default_cat_media_url();
 	}
 
 	/**
@@ -390,10 +416,10 @@ class Caas_Control_Settings {
 			'frequencyMinutes'   => (int) $s['frequency_minutes'],
 			'appearAfterSeconds' => (int) $s['appear_after_seconds'],
 			'durationSeconds'    => (int) $s['duration_seconds'],
-			'customImageUrl'     => $s['custom_image_url'],
-			'catImageUrl'        => self::default_cat_media_url(),
-			'meowSoundUrl'       => self::asset_url( 'gpl-cat/meow.ogg' ),
-			'judgingVideoUrl'    => self::judging_video_url(),
+			'customImageUrl'     => esc_url_raw( (string) $s['custom_image_url'] ),
+			'catImageUrl'        => esc_url_raw( self::default_cat_media_url() ),
+			'meowSoundUrl'       => esc_url_raw( self::asset_url( 'gpl-cat/meow.ogg' ) ),
+			'judgingVideoUrl'    => esc_url_raw( self::judging_video_url() ),
 			'behaviors'          => array(
 				'walk'         => (bool) $s['behavior_walk'],
 				'sit'          => (bool) $s['behavior_sit'],
@@ -415,13 +441,18 @@ class Caas_Control_Settings {
 			),
 			'proEnabled'         => (bool) $s['pro_enabled'],
 			'strings'            => array(
-				'publishGate'    => __( 'Cat is reviewing your changes.', 'caas-control' ),
-				'idleJudgment'   => __( 'You\'ve been a sitting duck on this page for 15 minutes. Move on, fella.', 'caas-control' ),
-				'fakeSecurity'   => __( 'Suspicious mouse movement detected!', 'caas-control' ),
+				'publishGate'       => __( 'Cat is reviewing your changes.', 'caas-control' ),
+				'idleJudgment'      => __( 'You\'ve been a sitting duck on this page for 15 minutes. Move on, fella.', 'caas-control' ),
+				'fakeSecurity'      => __( 'Suspicious mouse movement detected!', 'caas-control' ),
+				'guilt404'          => __( 'I couldn\'t find that page either. Now give me belly rubs.', 'caas-control' ),
+				'keyboardTrample'   => __( 'Paws on keyboard!', 'caas-control' ),
 				'seoRejection'   => __( 'Fill out your SEO meta description before I let you publish.', 'caas-control' ),
-				'scrollPost'     => __( 'Scramble!', 'caas-control' ),
+				'scrollPost'            => __( 'Scramble!', 'caas-control' ),
+				'scrollPostPreviewHint' => __( 'Click the scratching post (bottom-right) to demo scroll-to-top.', 'caas-control' ),
+				'wooCartPreviewLabel'   => __( 'Demo cart', 'caas-control' ),
 				'shoo'                 => __( 'Shoo!', 'caas-control' ),
 				'shooDismissed'        => __( 'Fine, I\'ll leave.', 'caas-control' ),
+				'countdownMinsOnly'    => __( '%s mins left', 'caas-control' ),
 				'countdownMinsSeconds' => __( '%1$s mins %2$s sec left', 'caas-control' ),
 				'countdownSeconds'     => __( '%s sec left', 'caas-control' ),
 				'judgingYou'     => sprintf(

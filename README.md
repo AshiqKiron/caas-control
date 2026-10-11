@@ -26,9 +26,15 @@ uninstall.php                 Cleanup on plugin delete
 
 ## Attributions
 
-Bundled companion cat video (`assets/gpl-cat/gpl-cat.mp4`):
+Bundled companion cat videos (`assets/gpl-cat/`):
 
-- [Charming gray cat lounging indoors on a couch](https://www.pexels.com/video/charming-gray-cat-lounging-indoors-on-a-couch-34508552/) — [Pexels](https://www.pexels.com/)
+- Default officer sprite (`gpl-cat.mp4`) — [Charming gray cat lounging indoors on a couch](https://www.pexels.com/video/charming-gray-cat-lounging-indoors-on-a-couch-34508552/)
+- Cat scratch (`cat-scratch.mp4`) — [A black and white cat is standing on its hind legs](https://www.pexels.com/video/a-black-and-white-cat-is-standing-on-its-hind-legs-19224529/)
+- Aggressive (`cat-agreesive.mp4`) — [Tabby stray cat in the public park](https://www.pexels.com/video/tabby-stray-cat-in-the-public-park-19977378/)
+- Laptop (`cat-laptop.mp4`) — [Calm cat resting on laptop keyboard](https://www.pexels.com/video/calm-cat-resting-on-laptop-keyboard-35609097/)
+- 404 (`cat-confused.mp4`) — [A cat wearing a red shirt and standing on a table](https://www.pexels.com/video/a-cat-wearing-a-red-shirt-and-standing-on-a-table-20467066/)
+
+All videos from [Pexels](https://www.pexels.com/).
 
 ## License
 

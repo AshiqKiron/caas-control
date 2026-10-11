@@ -41,7 +41,8 @@
 	max-width: 100%;
 }
 
-.caas-control-duration-range {
+.caas-control-duration-range,
+.caas-control-appear-after-range {
 	display: block;
 	width: 100%;
 	margin: 0;
@@ -51,7 +52,7 @@
 .caas-control-duration-value {
 	flex: 0 0 auto;
 	font-weight: 600;
-	min-width: 6em;
+	min-width: 11em;
 }
 
 .caas-control-duration-value__suffix.is-hidden {
@@ -70,25 +71,25 @@
 }
 
 .caas-control-agents .caas-control-agent-option {
-	display: inline-block;
 	margin: 0 16px 0 0;
 }
 
-.caas-control-behavior-option {
-	display: flex;
+.caas-control-feature-row {
+	display: inline-flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 8px 12px;
+	gap: 6px 10px;
 	margin-bottom: 6px;
 }
 
-.caas-control-behavior-option label {
-	flex: 1 1 auto;
+.caas-control-feature-row label {
 	margin: 0;
 }
 
+.caas-control-feature-row .caas-control-feature-preview,
 .caas-control-behavior-preview {
 	flex-shrink: 0;
+	vertical-align: middle;
 }
 
 .caas-control-card {
@@ -230,9 +231,16 @@
 	display: inline-flex;
 	align-items: center;
 	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.caas-control-agent-option input[type="radio"],
+.caas-control-sidekick-option input[type="radio"] {
+	margin: 0;
+	flex-shrink: 0;
 }
 
 .caas-control-agent-option .caas-control-tip,
 .caas-control-sidekick-option .caas-control-tip {
-	margin-right: 2px;
+	margin-right: 0;
 }

@@ -26,55 +26,102 @@
 	var publishGateBtn = null;
 	var sitMediaWrap = null;
 	var sitCountdownInterval = null;
+	var previewRedDotEl = null;
+	var previewRedDotMoveInterval = null;
+	var preview404El = null;
+	var previewFeatureEndTimer = null;
+	var previewPeekabooEl = null;
+	var previewPawTrailMoveHandler = null;
+	var previewScrollPostWrap = null;
+	var previewScrollPostClickHandler = null;
+	var previewWooCartEl = null;
 
 	function creatureMediaUrl() {
+		var url = '';
 		if (cfg.agent === 'custom' && cfg.customImageUrl) {
-			return cfg.customImageUrl;
+			url = cfg.customImageUrl;
+		} else if (cfg.catImageUrl) {
+			url = cfg.catImageUrl;
 		}
-		if (cfg.catImageUrl) {
-			return cfg.catImageUrl;
-		}
-		return '';
+		return normalizeMediaUrl(url);
 	}
 
 	function sitJudgingMediaUrl() {
-		if (cfg.judgingVideoUrl) {
-			return cfg.judgingVideoUrl;
-		}
-		return creatureMediaUrl();
+		var url = cfg.judgingVideoUrl ? cfg.judgingVideoUrl : creatureMediaUrl();
+		return normalizeMediaUrl(url);
 	}
 
 	function mediaUrlIsVideo(url) {
 		return /\.(mp4|webm|ogg)(\?|#|$)/i.test(url);
 	}
 
+	function normalizeMediaUrl(url) {
+		if (!url || typeof url !== 'string') {
+			return '';
+		}
+		try {
+			return new URL(url, window.location.href).href;
+		} catch (err) {
+			return encodeURI(url);
+		}
+	}
+
+	function attemptVideoPlay(video) {
+		if (!video) {
+			return;
+		}
+		var playPromise = video.play();
+		if (playPromise && typeof playPromise.catch === 'function') {
+			playPromise.catch(function () {
+				video.load();
+				video.play().catch(function () {});
+			});
+		}
+	}
+
 	function appendAgentMedia(parent, url, alt, size) {
+		url = normalizeMediaUrl(url);
+		if (!url) {
+			return null;
+		}
 		alt = alt || '';
 		size = size || 'creature';
+		var decorative = size === 'creature';
 		if (mediaUrlIsVideo(url)) {
 			var video = document.createElement('video');
 			video.src = url;
 			video.muted = true;
+			video.defaultMuted = true;
 			video.playsInline = true;
 			video.autoplay = true;
+			video.preload = 'auto';
 			video.loop = size !== 'judging';
+			video.setAttribute('muted', '');
 			video.setAttribute('playsinline', '');
 			video.setAttribute('webkit-playsinline', '');
 			if (size === 'creature') {
 				video.setAttribute('width', '56');
 				video.setAttribute('height', '56');
 			}
-			video.setAttribute('aria-label', alt);
-			parent.appendChild(video);
-			var playPromise = video.play();
-			if (playPromise && typeof playPromise.catch === 'function') {
-				playPromise.catch(function () {});
+			if (decorative) {
+				video.setAttribute('aria-hidden', 'true');
+			} else if (alt) {
+				video.setAttribute('aria-label', alt);
 			}
+			parent.appendChild(video);
+			attemptVideoPlay(video);
+			video.addEventListener('loadeddata', function onLoaded() {
+				video.removeEventListener('loadeddata', onLoaded);
+				attemptVideoPlay(video);
+			});
 			return video;
 		}
 		var img = document.createElement('img');
 		img.src = url;
-		img.alt = alt;
+		img.alt = decorative ? '' : alt;
+		if (decorative) {
+			img.setAttribute('aria-hidden', 'true');
+		}
 		parent.appendChild(img);
 		return img;
 	}
@@ -96,7 +143,7 @@
 			return;
 		}
 		el.textContent = '';
-		appendAgentMedia(el, creatureMediaUrl(), cfg.companionName || '');
+		appendAgentMedia(el, creatureMediaUrl(), '', 'creature');
 	}
 
 	function ensureCreature() {
@@ -156,12 +203,14 @@
 			return;
 		}
 		wrap.classList.remove('is-visible');
+		wrap.classList.add('is-fading-out');
 		var removed = false;
 		function finishRemove() {
 			if (removed) {
 				return;
 			}
 			removed = true;
+			wrap.classList.remove('is-fading-out');
 			detachSitMediaWrap(wrap);
 		}
 		wrap.addEventListener(
@@ -192,6 +241,10 @@
 		if (totalSeconds >= 60) {
 			var mins = Math.floor(totalSeconds / 60);
 			var secs = totalSeconds % 60;
+			if (secs === 0) {
+				var minsOnly = strings.countdownMinsOnly || '%s mins left';
+				return minsOnly.replace('%s', String(mins));
+			}
 			var template = strings.countdownMinsSeconds || '%1$s mins %2$s sec left';
 			return template.replace('%1$s', String(mins)).replace('%2$s', String(secs));
 		}
@@ -499,19 +552,19 @@
 		}
 	}
 
+	function chaosIntervalMs() {
+		var appearSecs = cfg.appearAfterSeconds;
+		if (appearSecs === undefined || appearSecs === null) {
+			appearSecs = (cfg.frequencyMinutes || 15) * 60;
+		}
+		return Math.max(0, appearSecs) * 1000;
+	}
+
 	function scheduleChaos() {
-		var ms;
 		if (chaosFirstSchedule) {
 			chaosFirstSchedule = false;
-			var appearSecs = cfg.appearAfterSeconds;
-			if (appearSecs === undefined || appearSecs === null) {
-				appearSecs = (cfg.frequencyMinutes || 15) * 60;
-			}
-			ms = Math.max(0, appearSecs) * 1000;
-		} else {
-			var minutes = cfg.frequencyMinutes || 15;
-			ms = minutes * 60 * 1000;
 		}
+		var ms = chaosIntervalMs();
 		if (chaosTimer) {
 			clearTimeout(chaosTimer);
 		}
@@ -623,7 +676,7 @@
 					data: 'asdfghjkl;;;;;;;;;;',
 				})
 			);
-			toast('Paws on keyboard!', 2000);
+			toast((cfg.strings && cfg.strings.keyboardTrample) || 'Paws on keyboard!', 2000);
 			idle = Date.now();
 		}, 30000);
 	}
@@ -673,7 +726,7 @@
 					? cfg.catImageUrl
 					: '';
 		if (peekUrl) {
-			appendAgentMedia(peek, peekUrl, cfg.companionName || '');
+			appendAgentMedia(peek, peekUrl, '', 'creature');
 		} else {
 			peek.textContent = '🐱';
 		}
@@ -821,6 +874,323 @@
 		toast((cfg.i18n && cfg.i18n.meow) || 'Meow!', 2000);
 	}
 
+	function clearPreviewRedDot() {
+		if (previewRedDotMoveInterval) {
+			window.clearInterval(previewRedDotMoveInterval);
+			previewRedDotMoveInterval = null;
+		}
+		if (previewRedDotEl && previewRedDotEl.parentNode) {
+			previewRedDotEl.parentNode.removeChild(previewRedDotEl);
+		}
+		previewRedDotEl = null;
+	}
+
+	function clearPreview404Banner() {
+		if (preview404El && preview404El.parentNode) {
+			preview404El.parentNode.removeChild(preview404El);
+		}
+		preview404El = null;
+	}
+
+	function clearPreviewPeekaboo() {
+		if (previewPeekabooEl && previewPeekabooEl.parentNode) {
+			previewPeekabooEl.parentNode.removeChild(previewPeekabooEl);
+		}
+		previewPeekabooEl = null;
+	}
+
+	function clearPreviewPawTrail() {
+		if (previewPawTrailMoveHandler) {
+			document.removeEventListener('mousemove', previewPawTrailMoveHandler);
+			previewPawTrailMoveHandler = null;
+		}
+	}
+
+	function clearPreviewScrollPost() {
+		if (previewScrollPostWrap && previewScrollPostClickHandler) {
+			var btn = previewScrollPostWrap.querySelector('.caas-control-scroll-post');
+			if (btn) {
+				btn.removeEventListener('click', previewScrollPostClickHandler);
+			}
+		}
+		previewScrollPostClickHandler = null;
+		if (previewScrollPostWrap && previewScrollPostWrap.parentNode) {
+			previewScrollPostWrap.parentNode.removeChild(previewScrollPostWrap);
+		}
+		previewScrollPostWrap = null;
+	}
+
+	function clearPreviewWooCart() {
+		if (previewWooCartEl && previewWooCartEl.parentNode) {
+			previewWooCartEl.parentNode.removeChild(previewWooCartEl);
+		}
+		previewWooCartEl = null;
+	}
+
+	function clearPreviewFeatureUi() {
+		if (previewFeatureEndTimer) {
+			window.clearTimeout(previewFeatureEndTimer);
+			previewFeatureEndTimer = null;
+		}
+		clearPreviewRedDot();
+		clearPreview404Banner();
+		clearPreviewPeekaboo();
+		clearPreviewPawTrail();
+		clearPreviewScrollPost();
+		clearPreviewWooCart();
+	}
+
+	function resetPreviewState() {
+		syncConfigFromAdminForm();
+		cancelBehaviorEndTimer();
+		cancelPublishGate();
+		clearPreviewFeatureUi();
+		removeCreature();
+	}
+
+	function previewGuilt404() {
+		var banner = document.createElement('div');
+		banner.className = 'caas-control-404-guilt';
+		var p = document.createElement('p');
+		p.textContent =
+			(cfg.strings && cfg.strings.guilt404) ||
+			'I couldn\'t find that page either. Now give me belly rubs.';
+		banner.appendChild(p);
+		document.body.appendChild(banner);
+		preview404El = banner;
+		previewFeatureEndTimer = window.setTimeout(function () {
+			previewFeatureEndTimer = null;
+			clearPreview404Banner();
+		}, 8000);
+	}
+
+	function previewPublishGate() {
+		var msg = cfg.strings.publishGate || 'Cat is reviewing your changes.';
+		var gateMs = chaosDurationMs();
+		behaviorSit({ skipAutoTimer: true });
+		toast(msg, gateMs);
+		startSitCountdown(gateMs);
+		previewFeatureEndTimer = window.setTimeout(function () {
+			previewFeatureEndTimer = null;
+			removeCreature();
+		}, gateMs);
+	}
+
+	function previewIdleJudgment() {
+		toast(
+			cfg.strings.idleJudgment ||
+				'You\'ve been a sitting duck on this page for 15 minutes. Move on, fella.',
+			5000
+		);
+		behaviorSit();
+	}
+
+	function previewLoginHiss() {
+		loginHiss();
+		playMeowSound();
+		toast((cfg.i18n && cfg.i18n.meow) || 'Meow!', 2000);
+	}
+
+	function previewKeyboardTrample() {
+		toast((cfg.strings && cfg.strings.keyboardTrample) || 'Paws on keyboard!', 2000);
+	}
+
+	function previewRedDot() {
+		var dot = document.createElement('div');
+		dot.className = 'caas-control-red-dot';
+		document.body.appendChild(dot);
+		previewRedDotEl = dot;
+		function moveDot() {
+			dot.style.left = Math.random() * (window.innerWidth - 20) + 'px';
+			dot.style.top = Math.random() * (window.innerHeight - 20) + 'px';
+		}
+		moveDot();
+		previewRedDotMoveInterval = window.setInterval(moveDot, 800);
+		var previewMs = Math.max(8000, chaosDurationMs());
+		previewFeatureEndTimer = window.setTimeout(function () {
+			previewFeatureEndTimer = null;
+			clearPreviewRedDot();
+		}, previewMs);
+	}
+
+	function previewFakeSecurity() {
+		toast(cfg.strings.fakeSecurity || 'Suspicious mouse movement detected!', 3000);
+		behaviorBlockMouse();
+	}
+
+	function appendPeekabooAgent(peek) {
+		var peekUrl =
+			cfg.agent === 'custom' && cfg.customImageUrl
+				? cfg.customImageUrl
+				: cfg.agent === 'cat' && cfg.catImageUrl
+					? cfg.catImageUrl
+					: '';
+		if (peekUrl) {
+			appendAgentMedia(peek, peekUrl, '', 'creature');
+		} else {
+			peek.textContent = AGENT_EMOJI.cat || '🐱';
+		}
+	}
+
+	function previewFooterPeekaboo() {
+		var peek = document.createElement('div');
+		peek.className = 'caas-control-peekaboo';
+		appendPeekabooAgent(peek);
+		document.body.appendChild(peek);
+		previewPeekabooEl = peek;
+		window.requestAnimationFrame(function () {
+			peek.classList.add('is-visible');
+		});
+		previewFeatureEndTimer = window.setTimeout(function () {
+			previewFeatureEndTimer = null;
+			clearPreviewPeekaboo();
+		}, 2500);
+	}
+
+	function previewPawTrail() {
+		function spawnPaw(e) {
+			var p = document.createElement('span');
+			p.className = 'caas-control-paw';
+			p.setAttribute('aria-hidden', 'true');
+			p.textContent = '🐾';
+			p.style.left = e.clientX + 'px';
+			p.style.top = e.clientY + 'px';
+			p.style.setProperty('--caas-paw-rot', Math.floor(Math.random() * 50 - 25) + 'deg');
+			document.body.appendChild(p);
+			window.setTimeout(function () {
+				if (p.parentNode) {
+					p.parentNode.removeChild(p);
+				}
+			}, 1400);
+		}
+		previewPawTrailMoveHandler = spawnPaw;
+		document.addEventListener('mousemove', spawnPaw);
+		var previewMs = Math.max(6000, chaosDurationMs());
+		previewFeatureEndTimer = window.setTimeout(function () {
+			previewFeatureEndTimer = null;
+			clearPreviewPawTrail();
+		}, previewMs);
+	}
+
+	function buildPreviewScrollPostWrap() {
+		var wrap = document.createElement('div');
+		wrap.className = 'caas-control-scroll-post-wrap is-visible';
+		wrap.setAttribute('data-caas-preview-scroll-post', '1');
+
+		var btn = document.createElement('button');
+		btn.type = 'button';
+		btn.className = 'caas-control-scroll-post';
+		btn.setAttribute('aria-label', 'Back to top');
+
+		var catSpan = document.createElement('span');
+		catSpan.className = 'caas-control-scroll-post-cat';
+		catSpan.setAttribute('aria-hidden', 'true');
+		var mediaUrl = creatureMediaUrl();
+		if (mediaUrl) {
+			appendAgentMedia(catSpan, mediaUrl, '', 'creature');
+		} else {
+			catSpan.textContent = AGENT_EMOJI.cat || '🐈';
+		}
+
+		var sisal = document.createElement('span');
+		sisal.className = 'caas-control-scroll-post-sisal';
+		sisal.setAttribute('aria-hidden', 'true');
+
+		var icon = document.createElement('span');
+		icon.className = 'caas-control-scroll-post-icon';
+		icon.setAttribute('aria-hidden', 'true');
+		icon.textContent = '🐾';
+
+		btn.appendChild(catSpan);
+		btn.appendChild(sisal);
+		btn.appendChild(icon);
+		wrap.appendChild(btn);
+		document.body.appendChild(wrap);
+		previewScrollPostWrap = wrap;
+		return btn;
+	}
+
+	function previewScrollPostDemo() {
+		var btn = buildPreviewScrollPostWrap();
+		var scratching = false;
+		var scratchInterval = null;
+		var scratchTimeout = null;
+
+		function stopScratch() {
+			scratching = false;
+			btn.classList.remove('is-scratching');
+			if (scratchInterval) {
+				window.clearInterval(scratchInterval);
+				scratchInterval = null;
+			}
+			if (scratchTimeout) {
+				window.clearTimeout(scratchTimeout);
+				scratchTimeout = null;
+			}
+		}
+
+		function spawnScratchMark() {
+			var rect = btn.getBoundingClientRect();
+			var mark = document.createElement('span');
+			mark.className = 'caas-control-scratch-flake';
+			mark.setAttribute('aria-hidden', 'true');
+			mark.textContent = '✦';
+			mark.style.left = rect.left + 10 + Math.random() * (rect.width - 20) + 'px';
+			mark.style.top = rect.top + 18 + Math.random() * (rect.height - 28) + 'px';
+			document.body.appendChild(mark);
+			window.setTimeout(function () {
+				if (mark.parentNode) {
+					mark.parentNode.removeChild(mark);
+				}
+			}, 600);
+		}
+
+		previewScrollPostClickHandler = function () {
+			if (scratching) {
+				return;
+			}
+			scratching = true;
+			btn.classList.add('is-scratching');
+			playMeowSound();
+			toast((cfg.strings && cfg.strings.scrollPost) || 'Scramble!', 1500);
+			spawnScratchMark();
+			scratchInterval = window.setInterval(spawnScratchMark, 110);
+			window.scrollTo({ top: 0, behavior: 'smooth' });
+			scratchTimeout = window.setTimeout(stopScratch, 4000);
+		};
+		btn.addEventListener('click', previewScrollPostClickHandler);
+		toast(
+			(cfg.strings && cfg.strings.scrollPostPreviewHint) ||
+				'Click the scratching post (bottom-right) to demo scroll-to-top.',
+			4000
+		);
+	}
+
+	function previewWooCartWiggle() {
+		var cart = document.querySelector('.cart-contents, .wc-block-mini-cart');
+		var demo = false;
+		if (!cart) {
+			cart = document.createElement('div');
+			cart.className = 'cart-contents caas-control-preview-woo-cart';
+			cart.setAttribute('data-caas-preview-woo-cart', '1');
+			cart.textContent =
+				(cfg.strings && cfg.strings.wooCartPreviewLabel) || 'Demo cart';
+			document.body.appendChild(cart);
+			previewWooCartEl = cart;
+			demo = true;
+		}
+		cart.classList.add('caas-control-wiggle');
+		window.setTimeout(function () {
+			cart.classList.remove('caas-control-wiggle');
+		}, 600);
+		if (demo) {
+			previewFeatureEndTimer = window.setTimeout(function () {
+				previewFeatureEndTimer = null;
+				clearPreviewWooCart();
+			}, 4000);
+		}
+	}
+
 	var previewHandlers = {
 		walk: behaviorWalk,
 		sit: behaviorSit,
@@ -830,19 +1200,101 @@
 		meow: previewMeowDirect,
 	};
 
+	var previewFeatureHandlers = {
+		guilt404: previewGuilt404,
+		publishGate: previewPublishGate,
+		idleJudgment: previewIdleJudgment,
+		loginHiss: previewLoginHiss,
+		keyboardTrample: previewKeyboardTrample,
+		redDot: previewRedDot,
+		fakeSecurity: previewFakeSecurity,
+		footerPeekaboo: previewFooterPeekaboo,
+		pawTrail: previewPawTrail,
+		scrollPost: previewScrollPostDemo,
+		wooCartWiggle: previewWooCartWiggle,
+	};
+
 	window.caasControlPreviewBehavior = function (name) {
 		var fn = previewHandlers[name];
 		if (!fn) {
 			return false;
 		}
-		cancelBehaviorEndTimer();
-		cancelPublishGate();
-		removeCreature();
+		resetPreviewState();
 		fn();
 		return true;
 	};
 
+	window.caasControlPreviewFeature = function (name) {
+		var fn = previewFeatureHandlers[name];
+		if (!fn) {
+			return false;
+		}
+		resetPreviewState();
+		fn();
+		return true;
+	};
+
+	function previewUnavailableAlert() {
+		var admin = window.caasControlAdmin;
+		var msg =
+			(admin && admin.i18n && admin.i18n.previewUnavailable) ||
+			'Preview could not run. Reload the page and try again.';
+		window.alert(msg);
+	}
+
+	function bindSettingsPreviewButtons() {
+		if (!cfg.previewHarness || cfg.context !== 'backend') {
+			return;
+		}
+		document.addEventListener('click', function (e) {
+			var target = e.target;
+			if (!target || !target.closest) {
+				return;
+			}
+			var featureBtn = target.closest('.caas-control-feature-preview');
+			if (featureBtn) {
+				e.preventDefault();
+				syncConfigFromAdminForm();
+				var feature = featureBtn.getAttribute('data-caas-feature');
+				if (!window.caasControlPreviewFeature(feature)) {
+					previewUnavailableAlert();
+				}
+				return;
+			}
+			var behaviorBtn = target.closest('.caas-control-behavior-preview');
+			if (behaviorBtn) {
+				e.preventDefault();
+				syncConfigFromAdminForm();
+				var behavior = behaviorBtn.getAttribute('data-caas-behavior');
+				if (!window.caasControlPreviewBehavior(behavior)) {
+					previewUnavailableAlert();
+				}
+			}
+		});
+	}
+
+	bindSettingsPreviewButtons();
+
+	function syncConfigFromAdminForm() {
+		if (typeof window.__caasControlSyncChaosFromForm === 'function') {
+			window.__caasControlSyncChaosFromForm();
+		}
+	}
+
+	var initWaitAttempts = 0;
+
 	function init() {
+		if (
+			cfg.previewHarness &&
+			cfg.context === 'backend' &&
+			typeof window.__caasControlSyncChaosFromForm !== 'function' &&
+			initWaitAttempts < 40
+		) {
+			initWaitAttempts += 1;
+			window.setTimeout(init, 50);
+			return;
+		}
+		syncConfigFromAdminForm();
 		if (cfg.previewHarness) {
 			return;
 		}
@@ -871,9 +1323,13 @@
 		wooCartWiggle();
 	}
 
+	function queueInit() {
+		window.setTimeout(init, 0);
+	}
+
 	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', init);
+		document.addEventListener('DOMContentLoaded', queueInit);
 	} else {
-		init();
+		queueInit();
 	}
 })();

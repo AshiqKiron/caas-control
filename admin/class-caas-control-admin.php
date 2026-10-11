@@ -174,8 +174,8 @@ class Caas_Control_Admin {
 		require CAAS_CONTROL_PLUGIN_DIR . 'admin/partials/pro-breed-shop.php';
 	}
 
-	public function enqueue_styles(): void {
-		if ( ! $this->is_plugin_screen() && ! $this->should_load_admin_chaos() && ! $this->is_user_profile_screen() ) {
+	public function enqueue_styles( string $hook_suffix = '' ): void {
+		if ( ! $this->is_caas_admin_page( $hook_suffix ) && ! $this->should_load_admin_chaos( $hook_suffix ) && ! $this->is_user_profile_screen() ) {
 			return;
 		}
 
@@ -187,7 +187,7 @@ class Caas_Control_Admin {
 			'all'
 		);
 
-		if ( $this->should_load_public_chaos_styles() ) {
+		if ( $this->should_load_public_chaos_styles( $hook_suffix ) ) {
 			wp_enqueue_style(
 				$this->plugin_name . '-public-chaos',
 				CAAS_CONTROL_PLUGIN_URL . 'public/css/caas-control-public.css',
@@ -198,22 +198,25 @@ class Caas_Control_Admin {
 		}
 	}
 
-	public function enqueue_scripts(): void {
-		$on_settings = $this->is_plugin_screen();
+	public function enqueue_scripts( string $hook_suffix = '' ): void {
+		$on_settings = $this->is_caas_admin_page( $hook_suffix );
 		$on_profile  = $this->is_user_profile_screen();
 
-		$load_chaos           = $this->should_load_admin_chaos();
-		$load_preview_harness = $on_settings && ! $load_chaos;
+		$load_chaos   = $this->should_load_admin_chaos( $hook_suffix );
+		$chaos_loaded = false;
 
-		if ( $load_chaos ) {
-			$this->enqueue_chaos_script( 'backend', false );
-		} elseif ( $load_preview_harness ) {
+		// Settings screens always use the preview harness (manual Preview buttons), not live chaos hooks.
+		if ( $on_settings ) {
 			$this->enqueue_chaos_script( 'backend', true );
+			$chaos_loaded = true;
+		} elseif ( $load_chaos ) {
+			$this->enqueue_chaos_script( 'backend', false );
+			$chaos_loaded = true;
 		}
 
 		if ( $on_settings || $on_profile ) {
 			$admin_deps = array( 'jquery' );
-			if ( $load_chaos || $load_preview_harness ) {
+			if ( $chaos_loaded && $on_settings ) {
 				$admin_deps[] = $this->plugin_name . '-chaos';
 			}
 
@@ -239,9 +242,13 @@ class Caas_Control_Admin {
 						'proSoon'             => __( 'Pro upgrades coming soon—feed the cat in the meantime.', 'caas-control' ),
 						'mediaMissing'        => __( 'Media library is not available on this screen.', 'caas-control' ),
 						'previewUnavailable'  => __( 'Preview could not run. Reload the page and try again.', 'caas-control' ),
+						'durationMinsOnly'    => __( '%s mins', 'caas-control' ),
 						'durationMinsSeconds' => __( '%1$s mins %2$s seconds', 'caas-control' ),
 						'durationSeconds'     => __( 'seconds', 'caas-control' ),
-						'appearImmediately'   => __( 'Immediately', 'caas-control' ),
+						'durationSecondsMax'  => Caas_Control_Settings::duration_seconds_max(),
+						'durationUntilYourCry' => __( 'Until your cry - 10 mins', 'caas-control' ),
+						'appearAfterHoursMins' => __( '%1$s hour %2$s mins', 'caas-control' ),
+						'appearAfterHourLabelAboveMinutes' => 55,
 					),
 				)
 			);
@@ -312,17 +319,46 @@ class Caas_Control_Admin {
 		);
 	}
 
-	private function should_load_public_chaos_styles(): bool {
-		if ( $this->should_load_admin_chaos() ) {
+	/**
+	 * Preview button for an event-driven chaos feature (Global Menace).
+	 */
+	public static function feature_preview_button( string $feature_slug ): string {
+		return sprintf(
+			'<button type="button" class="button button-small caas-control-feature-preview" data-caas-feature="%1$s">%2$s</button>',
+			esc_attr( $feature_slug ),
+			esc_html__( 'Preview', 'caas-control' )
+		);
+	}
+
+	private function should_load_public_chaos_styles( string $hook_suffix = '' ): bool {
+		if ( $this->should_load_admin_chaos( $hook_suffix ) ) {
 			return true;
 		}
 
-		return $this->is_plugin_screen();
+		return $this->is_caas_admin_page( $hook_suffix );
 	}
 
-	private function is_plugin_screen(): bool {
+	/**
+	 * Whether the current admin request is a CaaS plugin settings page.
+	 *
+	 * @param string $hook_suffix Value passed to admin_enqueue_scripts (preferred).
+	 */
+	private function is_caas_admin_page( string $hook_suffix = '' ): bool {
+		if ( $hook_suffix !== '' && strpos( $hook_suffix, $this->plugin_name ) !== false ) {
+			return true;
+		}
+
 		$screen = get_current_screen();
-		return $screen && strpos( $screen->id, $this->plugin_name ) !== false;
+		if ( $screen && strpos( $screen->id, $this->plugin_name ) !== false ) {
+			return true;
+		}
+
+		if ( isset( $_GET['page'] ) ) {
+			$page = sanitize_key( wp_unslash( (string) $_GET['page'] ) );
+			return strpos( $page, $this->plugin_name ) === 0;
+		}
+
+		return false;
 	}
 
 	private function is_block_editor_screen(): bool {
@@ -342,13 +378,13 @@ class Caas_Control_Admin {
 		return $screen && in_array( $screen->base, array( 'profile', 'user-edit' ), true );
 	}
 
-	private function should_load_admin_chaos(): bool {
+	private function should_load_admin_chaos( string $hook_suffix = '' ): bool {
 		if ( ! is_admin() || ! Caas_Control_Settings::should_load_chaos( 'backend' ) ) {
 			return false;
 		}
 
 		$settings = Caas_Control_Settings::get_all();
-		if ( ! empty( $settings['habitat_specific_only'] ) && ! $this->is_plugin_screen() && ! $this->is_block_editor_screen() ) {
+		if ( ! empty( $settings['habitat_specific_only'] ) && ! $this->is_caas_admin_page( $hook_suffix ) && ! $this->is_block_editor_screen() ) {
 			return false;
 		}
 

@@ -74,6 +74,20 @@
 		var durationRangeSelector = 'input.caas-control-duration-range[name="caas_control_settings[duration_seconds]"]';
 		var appearAfterRangeSelector = 'input.caas-control-appear-after-range[name="caas_control_settings[appear_after_seconds]"]';
 
+		function chaosDurationSliderLabel(seconds) {
+			var i18n = data && data.i18n ? data.i18n : {};
+			var maxSeconds = i18n.durationSecondsMax != null ? parseInt(i18n.durationSecondsMax, 10) : 600;
+			if (!isNaN(maxSeconds) && seconds >= maxSeconds) {
+				var untilCry = i18n.durationUntilYourCry || 'Until your cry - 10 mins';
+				return {
+					text: untilCry,
+					useSecondsSuffix: false,
+					ariaText: untilCry,
+				};
+			}
+			return durationSliderLabel(seconds);
+		}
+
 		function durationSliderLabel(seconds) {
 			var i18n = data && data.i18n ? data.i18n : {};
 			if (seconds < 60) {
@@ -85,8 +99,14 @@
 			}
 			var mins = Math.floor(seconds / 60);
 			var secs = seconds % 60;
-			var template = i18n.durationMinsSeconds || '%1$s mins %2$s seconds';
-			var text = template.replace('%1$s', String(mins)).replace('%2$s', String(secs));
+			var text;
+			if (secs === 0) {
+				var minsOnly = i18n.durationMinsOnly || '%s mins';
+				text = minsOnly.replace('%s', String(mins));
+			} else {
+				var template = i18n.durationMinsSeconds || '%1$s mins %2$s seconds';
+				text = template.replace('%1$s', String(mins)).replace('%2$s', String(secs));
+			}
 			return {
 				text: text,
 				useSecondsSuffix: false,
@@ -96,15 +116,29 @@
 
 		function appearAfterSliderLabel(seconds) {
 			var i18n = data && data.i18n ? data.i18n : {};
-			if (seconds <= 0) {
-				var immediate = i18n.appearImmediately || 'Immediately';
+			var mins = Math.floor(seconds / 60);
+			var above =
+				i18n.appearAfterHourLabelAboveMinutes != null
+					? parseInt(i18n.appearAfterHourLabelAboveMinutes, 10)
+					: 55;
+			if (!isNaN(above) && mins > above) {
+				var hours = Math.floor(mins / 60);
+				var remMins = mins % 60;
+				var hourTemplate = i18n.appearAfterHoursMins || '%1$s hour %2$s mins';
+				var text = hourTemplate.replace('%1$s', String(hours)).replace('%2$s', String(remMins));
 				return {
-					text: immediate,
+					text: text,
 					useSecondsSuffix: false,
-					ariaText: immediate,
+					ariaText: text,
 				};
 			}
-			return durationSliderLabel(seconds);
+			var minsOnly = i18n.durationMinsOnly || '%s mins';
+			var minsText = minsOnly.replace('%s', String(mins));
+			return {
+				text: minsText,
+				useSecondsSuffix: false,
+				ariaText: minsText,
+			};
 		}
 
 		function syncRangeSliderUi(rangeSelector, labelFn) {
@@ -129,7 +163,7 @@
 		}
 
 		function syncDurationSliderUi() {
-			syncRangeSliderUi(durationRangeSelector, durationSliderLabel);
+			syncRangeSliderUi(durationRangeSelector, chaosDurationSliderLabel);
 		}
 
 		function syncAppearAfterSliderUi() {
@@ -180,24 +214,28 @@
 					chaos.appearAfterSeconds = appearSeconds;
 				}
 			}
+			if (!chaos.features) {
+				chaos.features = {};
+			}
+			function featureChecked(fieldKey) {
+				var selector =
+					'input[name="caas_control_settings[' + fieldKey + ']"]';
+				var $input = $agentForm.find(selector);
+				return $input.length > 0 && $input.is(':checked');
+			}
+			chaos.features.publishGate = featureChecked('enable_publish_gate');
+			chaos.features.idleJudgment = featureChecked('enable_idle_judgment');
+			chaos.features.keyboardTrample = featureChecked('enable_keyboard_trample');
+			chaos.features.redDot = featureChecked('enable_red_dot');
+			chaos.features.fakeSecurity = featureChecked('enable_fake_security');
+			chaos.features.footerPeekaboo = featureChecked('enable_footer_peekaboo');
+			chaos.features.pawTrail = featureChecked('enable_paw_trail');
+			chaos.features.scrollPost = featureChecked('enable_scroll_post');
+			chaos.features.wooCartWiggle = featureChecked('enable_woo_cart_wiggle');
 		}
 
-		$(document).on('click', '.caas-control-behavior-preview', function (e) {
-			e.preventDefault();
-			syncChaosConfigFromForm();
-			var behavior = this.getAttribute('data-caas-behavior');
-			if (typeof window.caasControlPreviewBehavior !== 'function') {
-				if (data && data.i18n && data.i18n.previewUnavailable) {
-					window.alert(data.i18n.previewUnavailable);
-				}
-				return;
-			}
-			if (!window.caasControlPreviewBehavior(behavior)) {
-				if (data && data.i18n && data.i18n.previewUnavailable) {
-					window.alert(data.i18n.previewUnavailable);
-				}
-			}
-		});
+		window.__caasControlSyncChaosFromForm = syncChaosConfigFromForm;
+		syncChaosConfigFromForm();
 
 		var frame;
 		$(document).on('click', '.caas-control-upload-image', function (e) {

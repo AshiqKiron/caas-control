@@ -16,9 +16,9 @@ Do not add a second global chaos bootstrap; extend `caas-control-chaos.js` or th
 
 ## Config shape
 
-PHP builds config via `Caas_Control_Settings::chaos_config_for_js()` (camelCase keys: `agent`, `customImageUrl`, `catImageUrl`, `meowSoundUrl`, `judgingVideoUrl`, `companionName`, `frequencyMinutes`, `durationSeconds`, `behaviors.*`, `features.*`, `strings`, `i18n`, `proEnabled`). Agents in JS: `cat` uses `catImageUrl`; `custom` uses `customImageUrl` when set (`creatureMediaUrl()`). URLs ending in `.mp4`/`.webm`/`.ogg` render as muted looping `<video>` via `appendAgentMedia()`; otherwise `<img>` or emoji fallback.
+PHP builds config via `Caas_Control_Settings::chaos_config_for_js()` (camelCase keys: `agent`, `customImageUrl`, `catImageUrl`, `meowSoundUrl`, `judgingVideoUrl`, `companionName`, `appearAfterSeconds`, `frequencyMinutes`, `durationSeconds`, `behaviors.*`, `features.*`, `strings`, `i18n`, `proEnabled`). Agents in JS: `cat` uses `catImageUrl`; `custom` uses `customImageUrl` when set (`creatureMediaUrl()` → `normalizeMediaUrl()`). URLs ending in `.mp4`/`.webm`/`.ogg` render as muted looping `<video>` via `appendAgentMedia()` (`attemptVideoPlay()`, including on `loadeddata`); creature-size media is decorative (`aria-hidden`, empty alt). Otherwise `<img>` or emoji fallback.
 
-`behaviors.*` maps PHP `behavior_*` keys to camelCase (`blockMouse`, `randomBlock`, etc.). `features.*` mirrors `enable_*` toggles: `publishGate`, `idleJudgment`, `keyboardTrample`, `redDot`, `fakeSecurity`, `footerPeekaboo`, `pawTrail`, `scrollPost`, `wooCartWiggle`. `durationSeconds` is 5–300 (step 5 from PHP). Notable `strings`: `judgingYou`, `idleJudgment`, `publishGate`, `scrollPost`, `shoo`, `shooDismissed`, `countdownMinsSeconds`, `countdownSeconds`. Admin/front merges extra keys:
+`behaviors.*` maps PHP `behavior_*` keys to camelCase (`blockMouse`, `randomBlock`, etc.). `features.*` mirrors `enable_*` toggles: `publishGate`, `idleJudgment`, `keyboardTrample`, `redDot`, `fakeSecurity`, `footerPeekaboo`, `pawTrail`, `scrollPost`, `wooCartWiggle`. `appearAfterSeconds` drives `chaosIntervalMs()` for first and repeat timed chaos; `frequencyMinutes` is fallback only when `appearAfterSeconds` is undefined/null. `durationSeconds` is 5–600 (step 5 from PHP). Notable `strings`: `judgingYou`, `idleJudgment`, `publishGate`, `scrollPost`, `shoo`, `shooDismissed`, `countdownMinsOnly`, `countdownMinsSeconds`, `countdownSeconds`. Admin/front merges extra keys:
 
 | Key | Typical values |
 |-----|------------------|
@@ -26,7 +26,7 @@ PHP builds config via `Caas_Control_Settings::chaos_config_for_js()` (camelCase 
 | `isAdmin` | boolean |
 | `sidekick` | user meta slug (admin only) |
 | `loginFailed` | true on failed login when login hiss is on |
-| `previewHarness` | true on Global Menace when chaos script loads for previews only (`init()` skips scheduler) |
+| `previewHarness` | true on CaaS settings pages: `init()` syncs the admin form then exits (no scheduler, no live feature hooks); preview clicks handled in chaos via `bindSettingsPreviewButtons()` |
 
 User-visible copy belongs in PHP `strings` / `i18n` inside `chaos_config_for_js()`, not hard-coded English in JS.
 
@@ -38,16 +38,18 @@ User-visible copy belongs in PHP `strings` / `i18n` inside `chaos_config_for_js(
 ## Sit and judging
 
 - `sitJudgingMediaUrl()` uses `cfg.judgingVideoUrl`, else falls back to `creatureMediaUrl()` (custom/cat sprite).
-- `behaviorSit()` centers the companion (`.caas-control-creature--sit`), then `playSitJudgingVideo()` builds `.caas-control-judging-media` with countdown (`.caas-control-judging-countdown`, `role="timer"`), **Shoo!** (`.caas-control-shoo-btn` → `shooAwayJudging()`), and media via `appendAgentMedia(..., 'judging')` (video does not loop). Wrap fades in with `.is-visible`; teardown uses opacity transition unless `removeSitMedia(true)`.
+- `behaviorSit()` centers the companion (`.caas-control-creature--sit`), then `playSitJudgingVideo()` builds `.caas-control-judging-media` with countdown (`.caas-control-judging-countdown`, `role="timer"`), **Shoo!** (`.caas-control-shoo-btn` → `shooAwayJudging()`), and media via `appendAgentMedia(..., 'judging')` (video does not loop). Wrap fades in with `.is-visible` (pointer-events enabled while visible/fading); teardown adds `.is-fading-out` and uses opacity transition unless `removeSitMedia(true)`.
 - End timing: `chaosDurationMs()` from `durationSeconds`; video sit uses `bindSitEndToChaosDuration()` (unloops, pauses at end); image/other uses timeout + `startSitCountdown()`. Publish gate calls `behaviorSit({ skipAutoTimer: true })` then `resumePublish(chaosDurationMs())` with countdown on the judging wrap.
 - `paintCreatureMedia()` refreshes creature DOM when agent/media changes; `ensureCreature()` sets aria-label each time.
 - Falls back to `strings.judgingYou` toast when no media URL exists.
 - Publish gate and idle judgment reuse sit/judging; random scheduler skips new antics while sit judgment is active (`isSitJudgmentActive()`).
 
-## Behavior preview (admin)
+## Behavior & feature preview (admin)
 
-- Global Menace: `.caas-control-behavior-preview` → `syncChaosConfigFromForm()` then `window.caasControlPreviewBehavior(slug)`. Slugs: `walk`, `sit`, `follow`, `blockMouse`, `randomBlock`, `meow` (direct meow sound + toast, not scheduler).
-- Requires chaos script on the settings screen (`previewHarness` or full backend chaos). On failure, alert `caasControlAdmin.i18n.previewUnavailable`.
+- Global Menace: Pawdructivity has one `.caas-control-behavior-preview` (walk). **Chaos Actions** / **Visitor features** use `.caas-control-feature-preview` with `data-caas-feature`. Delegated clicks (chaos `bindSettingsPreviewButtons()`, only when `previewHarness` + `context === 'backend'`) call `syncConfigFromAdminForm()` then `window.caasControlPreviewBehavior(slug)` or `window.caasControlPreviewFeature(slug)`. Each preview run starts with `resetPreviewState()` (clears prior preview DOM/timers/creature).
+- Behavior slugs: `walk`, `sit`, `follow`, `blockMouse`, `randomBlock`, `meow` (direct meow + toast). Feature slugs: `guilt404`, `publishGate`, `idleJudgment`, `loginHiss`, `keyboardTrample`, `redDot`, `fakeSecurity`, `footerPeekaboo`, `pawTrail`, `scrollPost`, `wooCartWiggle`. Preview-only UI classes include `.caas-control-preview-woo-cart`, reused live classes (`.caas-control-404-guilt`, `.caas-control-red-dot`, scroll-post wrap, etc.).
+- `syncChaosConfigFromForm()` (admin JS) updates live `durationSeconds`, `appearAfterSeconds`, agent/media, and mirrors checked `enable_*` fields into `cfg.features.*`; exposed as `window.__caasControlSyncChaosFromForm` on load. Backend preview harness waits up to ~2s for that function before `init()` completes.
+- Requires chaos on the settings screen (`previewHarness: true`). On failure, alert `caasControlAdmin.i18n.previewUnavailable`.
 
 ## Chaos UI hooks
 
@@ -59,7 +61,7 @@ User-visible copy belongs in PHP `strings` / `i18n` inside `chaos_config_for_js(
 | Sit judging | `.caas-control-judging-media` (`.is-visible`), `.caas-control-judging-countdown`, `.caas-control-shoo-btn` |
 | Toasts / blocks | `.caas-control-toast`, `.caas-control-mouse-block`, `.caas-control-screen-block` |
 
-Custom agent fields on Global Menace: `.caas-control-custom-agent-fields` toggled via `syncCustomAgentFields()` when agent radio is `custom` (scoped under `.caas-control-form`). Chaos duration: `input.caas-control-duration-range` inside `.caas-control-duration-slider`; `syncDurationSliderUi()` updates `.caas-control-duration-value__num` / `__suffix` and range `aria-valuetext` using `caasControlAdmin.i18n.durationSeconds` / `durationMinsSeconds`. Form `data-caas-cat-media-url` / `data-caas-judging-media-url` feed preview config. Media upload `.caas-control-upload-image` requires `wp.media` (only enqueued on settings screens); otherwise alert `caasControlAdmin.i18n.mediaMissing`.
+Custom agent fields on Global Menace: `.caas-control-custom-agent-fields` toggled via `syncCustomAgentFields()` when agent radio is `custom` (scoped under `.caas-control-form`). Range sliders share `.caas-control-duration-slider` styling: chaos duration `input.caas-control-duration-range` (`syncDurationSliderUi()` / `chaosDurationSliderLabel`, max → `durationUntilYourCry`); appear-after `input.caas-control-appear-after-range` (`syncAppearAfterSliderUi()` / `appearAfterSliderLabel`, hours template when minutes &gt; `appearAfterHourLabelAboveMinutes`). Labels update `.caas-control-duration-value__num` / `__suffix` and range `aria-valuetext` via `caasControlAdmin.i18n` (`durationMinsOnly`, `durationMinsSeconds`, `durationSeconds`, etc.). Form `data-caas-cat-media-url` / `data-caas-judging-media-url` feed preview config. Media upload `.caas-control-upload-image` requires `wp.media` (only enqueued on settings screens); otherwise alert `caasControlAdmin.i18n.mediaMissing`.
 
 ## Admin settings UI
 
